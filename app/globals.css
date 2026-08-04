@@ -129,6 +129,10 @@ button {
   animation: weatherDrift 4.2s linear infinite;
 }
 
+.inside .weather-layer {
+  opacity: 0;
+}
+
 @keyframes weatherDrift {
   from {
     transform: translate3d(-3%, -2%, 0);

@@ -46,6 +46,10 @@ type Interactable = {
 const maxHealth = 100;
 const mapMin = 6;
 const mapMax = 94;
+const indoorMinX = 34;
+const indoorMaxX = 66;
+const indoorMinY = 66;
+const indoorMaxY = 94;
 const interactRange = 18;
 
 const text = {
@@ -476,8 +480,12 @@ export default function Game() {
       setWalking(moving);
       if (moving) {
         const length = Math.hypot(dx, dy);
-        const nextX = (currentX: number) => clamp(currentX + (dx / length) * speed * delta, mapMin, mapMax);
-        const nextY = (currentY: number) => clamp(currentY + (dy / length) * speed * delta, mapMin, mapMax);
+        const minX = outside ? mapMin : indoorMinX;
+        const maxX = outside ? mapMax : indoorMaxX;
+        const minY = outside ? mapMin : indoorMinY;
+        const maxY = outside ? mapMax : indoorMaxY;
+        const nextX = (currentX: number) => clamp(currentX + (dx / length) * speed * delta, minX, maxX);
+        const nextY = (currentY: number) => clamp(currentY + (dy / length) * speed * delta, minY, maxY);
         setStepPhase((value) => value + delta * 12);
         setPosition((current) => {
           const x = nextX(current.x);
@@ -546,8 +554,8 @@ export default function Game() {
 
   const healthColor = health > 55 ? "#66d47e" : health > 25 ? "#e3c45c" : "#ef6a5b";
   const cooldownLeft = Math.max(0, cooldownUntil - Date.now());
-  const visibleObjects = interactables.filter((object) => object.area === area);
-  const visibleItems = worldItems.filter((item) => item.area === area);
+  const visibleObjects = interactables.filter((object) => object.area === area && (outside || object.type === "door"));
+  const visibleItems = worldItems.filter((item) => item.area === area && outside);
 
   return (
     <main className={`game-shell ${area} ${viewMode} ${outside ? "outside" : "inside"} ${walking ? "walking" : ""} ${eatingSprite !== null ? "eating" : ""}`} style={cameraVars}>

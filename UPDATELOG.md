@@ -15,3 +15,8 @@ This is the update log. Write like this. 0.00.1
 - Added a real WebGL scene with 3D ground, roads, buildings, zombies, interactable objects, item billboards, and a first-person weapon.
 - Verified the Three.js canvas renders nonblank pixels in the local browser preview.
 
+0.00.5
+- Changed the opening scene so the player starts inside the ruined house.
+- Added a Three.js interior room with walls, ceiling, floor, door opening, and a small table.
+- Limited movement to the room until the door interaction moves the player outside.
+

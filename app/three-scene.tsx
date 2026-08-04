@@ -101,6 +101,24 @@ function makePlayer() {
   return player;
 }
 
+function addInteriorRoom(group: THREE.Group) {
+  const floor = makeBox([42, 0.18, 36], 0x5e5849, new THREE.Vector3(0, 0, 37.5));
+  const backWall = makeBox([42, 5.8, 0.8], 0x24231e, new THREE.Vector3(0, 2.9, 20));
+  const leftWall = makeBox([0.8, 5.8, 36], 0x1d1d19, new THREE.Vector3(-21, 2.9, 37.5));
+  const rightWall = makeBox([0.8, 5.8, 36], 0x202018, new THREE.Vector3(21, 2.9, 37.5));
+  const frontLeft = makeBox([16, 5.8, 0.8], 0x26241d, new THREE.Vector3(-13, 2.9, 55));
+  const frontRight = makeBox([16, 5.8, 0.8], 0x26241d, new THREE.Vector3(13, 2.9, 55));
+  const ceiling = makeBox([42, 0.22, 36], 0x151512, new THREE.Vector3(0, 6.1, 37.5));
+  const mat = new THREE.MeshStandardMaterial({ color: 0x6d664f, roughness: 0.95 });
+  const table = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.45, 2.8), mat);
+  table.position.set(-10, 1.05, 32);
+  const tableLegA = makeBox([0.35, 1, 0.35], 0x493923, new THREE.Vector3(-11.8, 0.5, 31));
+  const tableLegB = makeBox([0.35, 1, 0.35], 0x493923, new THREE.Vector3(-8.2, 0.5, 31));
+  const tableLegC = makeBox([0.35, 1, 0.35], 0x493923, new THREE.Vector3(-11.8, 0.5, 33));
+  const tableLegD = makeBox([0.35, 1, 0.35], 0x493923, new THREE.Vector3(-8.2, 0.5, 33));
+  group.add(floor, backWall, leftWall, rightWall, frontLeft, frontRight, ceiling, table, tableLegA, tableLegB, tableLegC, tableLegD);
+}
+
 function makeWeapon(weapon?: SceneWeapon) {
   if (!weapon) return null;
   const group = new THREE.Group();
@@ -222,11 +240,14 @@ export default function ThreeScene({
     const state = stateRef.current;
     if (!state) return;
 
-    state.scene.background = new THREE.Color(area === "city" ? 0x202833 : 0x6d8ec5);
-    state.scene.fog = new THREE.Fog(area === "city" ? 0x202833 : 0x7d8c78, 45, 120);
+    const indoors = area === "countryside" && !outside;
+    state.scene.background = new THREE.Color(indoors ? 0x10110f : area === "city" ? 0x202833 : 0x6d8ec5);
+    state.scene.fog = new THREE.Fog(indoors ? 0x10110f : area === "city" ? 0x202833 : 0x7d8c78, indoors ? 30 : 45, indoors ? 82 : 120);
     state.dynamic.clear();
 
-    if (area === "countryside") {
+    if (indoors) {
+      addInteriorRoom(state.dynamic);
+    } else if (area === "countryside") {
       const house = makeBox([13, 4, 9], 0x6f5a3e, toWorld({ x: 41, y: 73 }).setY(2));
       const roof = makeBox([15, 2, 11], 0x3d332b, toWorld({ x: 41, y: 73 }).setY(5.2));
       state.dynamic.add(house, roof);
