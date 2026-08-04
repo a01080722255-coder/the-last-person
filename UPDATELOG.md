@@ -5,3 +5,8 @@ This is the update log. Write like this. 0.00.1
 - Fixed strafing being blocked in some sections by removing the indoor Y-axis movement clamp.
 - Split first-person character and hand styling into app/game-first-person.css so each file stays under 1000 lines.
 
+0.00.3
+- Added vertical mouse look for the first-person camera.
+- Increased first-person camera tracking so the view follows the player instead of feeling centered on the map.
+- Kept WASD movement aligned to the current horizontal viewing direction.
+

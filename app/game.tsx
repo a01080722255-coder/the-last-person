@@ -162,6 +162,7 @@ export default function Game() {
   const [area, setArea] = useState<Area>("countryside");
   const [position, setPosition] = useState({ x: 50, y: 84 });
   const [angle, setAngle] = useState(0);
+  const [pitch, setPitch] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("first");
   const [inventory, setInventory] = useState<Item[]>(initialInventory);
   const [selectedSlot, setSelectedSlot] = useState(0);
@@ -210,12 +211,14 @@ export default function Game() {
       : "WASD \uc774\ub3d9 · \ub9c8\uc6b0\uc2a4 \ud68c\uc804 · \ud074\ub9ad \uacf5\uaca9";
 
   const gameOver = health <= 0;
-  const cameraPanX = viewMode === "first" ? clamp((50 - position.x) * 0.72, -16, 16) : 0;
-  const cameraPanY = viewMode === "first" ? clamp((82 - position.y) * 0.58, -16, 22) : 0;
-  const worldRotation = `translate(${cameraPanX}%, ${cameraPanY}%) rotateX(${viewMode === "first" ? 82 : 58}deg) rotateZ(${-angle}deg)`;
+  const cameraPanX = viewMode === "first" ? clamp((50 - position.x) * 2.25, -98, 98) : 0;
+  const cameraPanY = viewMode === "first" ? clamp((58 - position.y) * 1.55, -82, 96) : 0;
+  const worldPitch = viewMode === "first" ? clamp(82 + pitch * 0.75, 66, 98) : 58;
+  const worldRotation = `translate(${cameraPanX}%, ${cameraPanY}%) rotateX(${worldPitch}deg) rotateZ(${-angle}deg)`;
   const cameraVars = {
     "--camera-bob": walking && started && !gameOver ? `${Math.sin(stepPhase) * 7}px` : "0px",
     "--camera-sway": walking && started && !gameOver ? `${Math.cos(stepPhase * 0.5) * 5}px` : "0px",
+    "--look-y": `${pitch * 0.75}vh`,
   } as CSSProperties;
 
   const playPickup = useCallback(() => {
@@ -376,6 +379,7 @@ export default function Game() {
     setArea("countryside");
     setPosition({ x: 50, y: 84 });
     setAngle(0);
+    setPitch(0);
     setViewMode("first");
     setInventory(initialInventory);
     setSelectedSlot(0);
@@ -537,6 +541,7 @@ export default function Game() {
       if (!started || gameOver) return;
       if (document.pointerLockElement === stageRef.current || event.buttons === 1) {
         setAngle((value) => (value + event.movementX * 0.065) % 360);
+        setPitch((value) => clamp(value - event.movementY * 0.06, -22, 22));
       }
     };
     window.addEventListener("mousemove", onMouseMove);
