@@ -63,6 +63,20 @@ button {
     linear-gradient(180deg, #182522 0%, #2b332d 54%, #1c1b17 100%);
 }
 
+.three-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: #172522;
+}
+
+.three-scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .first .stage {
   perspective: 760px;
   perspective-origin: 50% 52%;

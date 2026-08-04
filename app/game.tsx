@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import ThreeScene from "./three-scene";
 
 type Area = "countryside" | "city";
 type ViewMode = "first" | "third";
@@ -211,14 +212,9 @@ export default function Game() {
       : "WASD \uc774\ub3d9 · \ub9c8\uc6b0\uc2a4 \ud68c\uc804 · \ud074\ub9ad \uacf5\uaca9";
 
   const gameOver = health <= 0;
-  const cameraPanX = viewMode === "first" ? clamp((50 - position.x) * 2.25, -98, 98) : 0;
-  const cameraPanY = viewMode === "first" ? clamp((58 - position.y) * 1.55, -82, 96) : 0;
-  const worldPitch = viewMode === "first" ? clamp(82 + pitch * 0.75, 66, 98) : 58;
-  const worldRotation = `translate(${cameraPanX}%, ${cameraPanY}%) rotateX(${worldPitch}deg) rotateZ(${-angle}deg)`;
   const cameraVars = {
     "--camera-bob": walking && started && !gameOver ? `${Math.sin(stepPhase) * 7}px` : "0px",
     "--camera-sway": walking && started && !gameOver ? `${Math.cos(stepPhase * 0.5) * 5}px` : "0px",
-    "--look-y": `${pitch * 0.75}vh`,
   } as CSSProperties;
 
   const playPickup = useCallback(() => {
@@ -569,58 +565,21 @@ export default function Game() {
         onDoubleClick={beginGame}
         aria-label="The Last Person game stage"
       >
-        <div className="skyline" />
         <div className="weather-layer" />
         <div className="fog" />
-        <div className="world" style={{ transform: worldRotation }}>
-          <div className="road vertical" />
-          <div className="road horizontal" />
-          {area === "countryside" && <div className="house" style={{ left: "41%", top: "73%" }} />}
-          {area === "city" && (
-            <>
-              <div className="building tall" style={{ left: "16%", top: "16%" }} />
-              <div className="building" style={{ left: "68%", top: "18%" }} />
-              <div className="building wide" style={{ left: "58%", top: "67%" }} />
-            </>
-          )}
-          {visibleObjects.map((object) => (
-            <div key={object.id} className={`object ${object.type}`} style={{ left: `${object.x}%`, top: `${object.y}%` }} title={object.name} />
-          ))}
-          {visibleItems.map((item) => (
-            <div
-              key={`${item.id}-${item.x}-${item.y}`}
-              className="loot"
-              style={{ left: `${item.x}%`, top: `${item.y}%`, ...spriteStyle(item.sprite) }}
-              title={item.name}
-            />
-          ))}
-          {aliveZombies.map((zombie) => (
-            <div key={zombie.id} className="zombie" style={{ left: `${zombie.x}%`, top: `${zombie.y}%` }}>
-              <span style={{ transform: `scaleX(${zombie.hp / (area === "city" ? 45 : 35)})` }} />
-            </div>
-          ))}
-          <div
-            className="player"
-            style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `rotate(${angle}deg)` }}
-          >
-            <span className="player-shadow" />
-            <span className="player-head" />
-            <span className="player-body" />
-            <span className="player-leg left" />
-            <span className="player-leg right" />
-            <span className="player-weapon" style={currentWeapon ? spriteStyle(currentWeapon.sprite) : undefined} />
-          </div>
-        </div>
-
-        {viewMode === "first" && (
-          <div className={`first-person-view weapon-${currentWeapon?.id ?? "none"}`} aria-hidden="true">
-            <span className="first-person-arm">
-              <span className="first-person-hand" />
-              <span className="first-person-weapon" style={currentWeapon ? spriteStyle(currentWeapon.sprite) : undefined} />
-            </span>
-            {eatingSprite !== null && <span className="first-person-food" style={spriteStyle(eatingSprite)} />}
-          </div>
-        )}
+        <ThreeScene
+          area={area}
+          position={position}
+          angle={angle}
+          pitch={pitch}
+          viewMode={viewMode}
+          outside={outside}
+          walking={walking}
+          items={visibleItems}
+          zombies={aliveZombies}
+          objects={visibleObjects}
+          currentWeapon={currentWeapon}
+        />
         <div className="vignette" />
         <div className="crosshair" />
         <div className="prompt">{prompt}</div>
