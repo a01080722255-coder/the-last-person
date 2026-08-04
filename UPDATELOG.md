@@ -20,3 +20,10 @@ This is the update log. Write like this. 0.00.1
 - Added a Three.js interior room with walls, ceiling, floor, door opening, and a small table.
 - Limited movement to the room until the door interaction moves the player outside.
 
+0.00.6
+- Added 3D zombie health bars above living zombies.
+- Added player-centered 16x16 terrain chunks so the outside world continues as the player walks.
+- Darkened the world lighting and added a flashlight with 50% starting battery and 1% drain every 2 seconds.
+- Added a battery pickup inside the house and a flashlight battery UI.
+- Improved the first-person held weapon pose with a visible hand and forearm.
+

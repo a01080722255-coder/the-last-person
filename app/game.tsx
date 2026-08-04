@@ -6,7 +6,7 @@ import ThreeScene from "./three-scene";
 
 type Area = "countryside" | "city";
 type ViewMode = "first" | "third";
-type ItemKind = "food" | "weapon";
+type ItemKind = "food" | "weapon" | "battery";
 
 type Item = {
   id: string;
@@ -67,6 +67,7 @@ const text = {
   q: "Q \uc0c1\ud638\uc791\uc6a9",
   attack: "\ud074\ub9ad/Space \uacf5\uaca9",
   eat: "E \uc74c\uc2dd \uc0ac\uc6a9",
+  flashlight: "F \uc190\uc804\ub4f1",
   view: "V \uc2dc\uc810 \uc804\ud658",
   room: "\uc9d1 \uc548: \ubb38\uc744 \ucc3e\uc544 \ubc16\uc73c\ub85c",
   gameOver: "\uac8c\uc784 \uc624\ubc84",
@@ -85,11 +86,13 @@ const items: Record<string, Item> = {
   bat3: { id: "bat3", name: "\ubc29\ub9dd\uc774 3\ub2e8\uacc4", kind: "weapon", damage: 15, cooldown: 2, icon: "3", sprite: 8 },
   knife: { id: "knife", name: "\uce7c", kind: "weapon", damage: 30, cooldown: 10, icon: "K", sprite: 9 },
   gun: { id: "gun", name: "\ucd1d", kind: "weapon", damage: 45, cooldown: 1.5, icon: "P", sprite: 10 },
+  battery: { id: "battery", name: "\ubc30\ud130\ub9ac", kind: "battery", icon: "T", sprite: 1 },
 };
 
 const initialInventory: Item[] = [items.bat1];
 
 const initialWorldItems: WorldItem[] = [
+  { ...items.battery, x: 42, y: 78, area: "countryside" },
   { ...items.apple, x: 42, y: 57, area: "countryside" },
   { ...items.juice, x: 62, y: 37, area: "countryside" },
   { ...items.bread, x: 25, y: 69, area: "countryside" },
@@ -181,6 +184,8 @@ export default function Game() {
   const [walking, setWalking] = useState(false);
   const [stepPhase, setStepPhase] = useState(0);
   const [eatingSprite, setEatingSprite] = useState<number | null>(null);
+  const [flashlightOn, setFlashlightOn] = useState(true);
+  const [flashlightBattery, setFlashlightBattery] = useState(50);
   const keys = useRef<Set<string>>(new Set());
   const stageRef = useRef<HTMLDivElement>(null);
   const pickupAudio = useRef<HTMLAudioElement | null>(null);
@@ -251,6 +256,13 @@ export default function Game() {
     if (gameOver) return;
 
     if (nearestItem) {
+      if (nearestItem.kind === "battery") {
+        setFlashlightBattery((value) => clamp(value + 35, 0, 100));
+        setWorldItems((current) => current.filter((item) => item !== nearestItem));
+        playPickup();
+        showMessage("\ubc30\ud130\ub9ac\ub97c \ucc3e\uc558\ub2e4. \uc190\uc804\ub4f1 \uc804\ub825 +35%");
+        return;
+      }
       if (inventory.length >= 9) {
         showMessage("\uc778\ubca4\ud1a0\ub9ac\uac00 \uac00\ub4dd \ucc3c\ub2e4.");
         return;
@@ -392,6 +404,8 @@ export default function Game() {
     setMessage(text.opening);
     setWalking(false);
     setEatingSprite(null);
+    setFlashlightOn(true);
+    setFlashlightBattery(50);
     stopFootsteps();
   }, [stopFootsteps]);
 
@@ -426,6 +440,7 @@ export default function Game() {
       if (key >= "1" && key <= "9") setSelectedSlot(Number(key) - 1);
       if (key === "q") interact();
       if (key === "e") useSelectedItem();
+      if (key === "f") setFlashlightOn((enabled) => (flashlightBattery > 0 ? !enabled : false));
       if (key === "v") setViewMode((mode) => (mode === "first" ? "third" : "first"));
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -443,7 +458,7 @@ export default function Game() {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
     };
-  }, [attack, interact, useSelectedItem]);
+  }, [attack, flashlightBattery, interact, useSelectedItem]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -451,6 +466,18 @@ export default function Game() {
     }, 60000);
     return () => window.clearInterval(timer);
   }, [gameOver, started]);
+
+  useEffect(() => {
+    if (!started || gameOver || !flashlightOn) return;
+    const timer = window.setInterval(() => {
+      setFlashlightBattery((value) => {
+        const next = Math.max(0, value - 1);
+        if (next === 0) setFlashlightOn(false);
+        return next;
+      });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [flashlightOn, gameOver, started]);
 
   useEffect(() => {
     if (!started || gameOver) {
@@ -480,12 +507,14 @@ export default function Game() {
       setWalking(moving);
       if (moving) {
         const length = Math.hypot(dx, dy);
-        const minX = outside ? mapMin : indoorMinX;
-        const maxX = outside ? mapMax : indoorMaxX;
-        const minY = outside ? mapMin : indoorMinY;
-        const maxY = outside ? mapMax : indoorMaxY;
-        const nextX = (currentX: number) => clamp(currentX + (dx / length) * speed * delta, minX, maxX);
-        const nextY = (currentY: number) => clamp(currentY + (dy / length) * speed * delta, minY, maxY);
+        const nextX = (currentX: number) => {
+          const proposed = currentX + (dx / length) * speed * delta;
+          return outside ? proposed : clamp(proposed, indoorMinX, indoorMaxX);
+        };
+        const nextY = (currentY: number) => {
+          const proposed = currentY + (dy / length) * speed * delta;
+          return outside ? proposed : clamp(proposed, indoorMinY, indoorMaxY);
+        };
         setStepPhase((value) => value + delta * 12);
         setPosition((current) => {
           const x = nextX(current.x);
@@ -545,7 +574,7 @@ export default function Game() {
       if (!started || gameOver) return;
       if (document.pointerLockElement === stageRef.current || event.buttons === 1) {
         setAngle((value) => (value + event.movementX * 0.065) % 360);
-        setPitch((value) => clamp(value - event.movementY * 0.06, -22, 22));
+        setPitch((value) => clamp(value - event.movementY * 0.055, -72, 72));
       }
     };
     window.addEventListener("mousemove", onMouseMove);
@@ -555,7 +584,7 @@ export default function Game() {
   const healthColor = health > 55 ? "#66d47e" : health > 25 ? "#e3c45c" : "#ef6a5b";
   const cooldownLeft = Math.max(0, cooldownUntil - Date.now());
   const visibleObjects = interactables.filter((object) => object.area === area && (outside || object.type === "door"));
-  const visibleItems = worldItems.filter((item) => item.area === area && outside);
+  const visibleItems = worldItems.filter((item) => item.area === area && (outside || item.kind === "battery"));
 
   return (
     <main className={`game-shell ${area} ${viewMode} ${outside ? "outside" : "inside"} ${walking ? "walking" : ""} ${eatingSprite !== null ? "eating" : ""}`} style={cameraVars}>
@@ -587,6 +616,7 @@ export default function Game() {
           zombies={aliveZombies}
           objects={visibleObjects}
           currentWeapon={currentWeapon}
+          flashlightOn={flashlightOn && flashlightBattery > 0}
         />
         <div className="vignette" />
         <div className="crosshair" />
@@ -627,6 +657,14 @@ export default function Game() {
         </button>
       </aside>
 
+      <aside className="flashlight-panel">
+        <span>손전등</span>
+        <div className="battery-bar">
+          <b style={{ width: `${flashlightBattery}%` }} />
+        </div>
+        <strong>{flashlightOn && flashlightBattery > 0 ? "ON" : "OFF"} {flashlightBattery}%</strong>
+      </aside>
+
       <section className="message-log" aria-live="polite">{message}</section>
 
       <section className="inventory" aria-label={text.inventory}>
@@ -653,6 +691,7 @@ export default function Game() {
         <span>{text.q}</span>
         <span>{text.attack}</span>
         <span>{text.eat}</span>
+        <span>{text.flashlight}</span>
         <span>{text.view}</span>
         <span>{currentWeapon ? `${currentWeapon.name} \ud53c\ud574 ${currentWeapon.damage}` : "\uc74c\uc2dd \uc120\ud0dd\ub428"}</span>
         {cooldownLeft > 0 && <span>\ucfe8\ud0c0\uc784 {(cooldownLeft / 1000).toFixed(1)}\ucd08</span>}

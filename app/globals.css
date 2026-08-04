@@ -620,6 +620,7 @@ button {
 
 .health-panel,
 .status-panel,
+.flashlight-panel,
 .message-log,
 .help-strip {
   position: fixed;
@@ -644,13 +645,15 @@ button {
 
 .health-panel span,
 .status-panel span,
+.flashlight-panel span,
 .help-strip span {
   color: #d8d1be;
   font-size: 13px;
 }
 
 .health-panel strong,
-.status-panel strong {
+.status-panel strong,
+.flashlight-panel strong {
   font-size: 13px;
 }
 
@@ -681,6 +684,32 @@ button {
   min-height: 30px;
   padding: 4px 10px;
   background: linear-gradient(180deg, #4f6875, #2e414c);
+}
+
+.flashlight-panel {
+  right: 18px;
+  top: 72px;
+  width: min(280px, calc(100vw - 140px));
+  padding: 12px;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.battery-bar {
+  height: 12px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.battery-bar b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #d9c64f, #f5e182);
+  transition: width 0.25s ease;
 }
 
 .message-log {
@@ -842,6 +871,12 @@ button {
 
   .health-panel {
     right: 10px;
+    width: min(230px, calc(100vw - 116px));
+  }
+
+  .flashlight-panel {
+    right: 10px;
+    top: 70px;
     width: min(230px, calc(100vw - 116px));
   }
 

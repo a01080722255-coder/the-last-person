@@ -48,9 +48,11 @@ type ThreeSceneProps = {
   zombies: SceneZombie[];
   objects: SceneObject[];
   currentWeapon?: SceneWeapon;
+  flashlightOn: boolean;
 };
 
 const worldScale = 1.25;
+const chunkSize = 16;
 
 function toWorld(value: { x: number; y: number }) {
   return new THREE.Vector3((value.x - 50) * worldScale, 0, (value.y - 50) * worldScale);
@@ -92,6 +94,16 @@ function makeZombie() {
   return zombie;
 }
 
+function addZombieHealthBar(zombie: THREE.Group, hp: number, maxHp: number) {
+  const ratio = THREE.MathUtils.clamp(hp / maxHp, 0, 1);
+  const back = makeBox([1.55, 0.12, 0.08], 0x120f0e, new THREE.Vector3(0, 3.68, -0.1));
+  const color = ratio > 0.5 ? 0x63d27d : ratio > 0.25 ? 0xe1bf54 : 0xe45b4f;
+  const fill = makeBox([1.4 * ratio, 0.09, 0.09], color, new THREE.Vector3(-0.7 + 0.7 * ratio, 3.69, -0.15));
+  back.castShadow = false;
+  fill.castShadow = false;
+  zombie.add(back, fill);
+}
+
 function makePlayer() {
   const player = new THREE.Group();
   const body = makeBox([1, 1.8, 0.6], 0x59675f, new THREE.Vector3(0, 1.2, 0));
@@ -122,12 +134,46 @@ function addInteriorRoom(group: THREE.Group) {
 function makeWeapon(weapon?: SceneWeapon) {
   if (!weapon) return null;
   const group = new THREE.Group();
+  const sleeve = makeBox([0.44, 0.42, 1.18], 0x3d4b45, new THREE.Vector3(0, -0.05, 0.24));
+  const hand = makeBox([0.5, 0.38, 0.38], 0x6a7569, new THREE.Vector3(0, 0.02, -0.46));
+  sleeve.rotation.x = -0.14;
+  group.add(sleeve, hand);
+
   const color = weapon.id === "gun" ? 0x202428 : weapon.id === "knife" ? 0xbcc4c5 : 0x7b5734;
-  const size: [number, number, number] = weapon.id === "gun" ? [0.95, 0.34, 0.48] : weapon.id === "knife" ? [0.22, 1.3, 0.14] : [0.28, 1.85, 0.28];
-  const mesh = makeBox(size, color, new THREE.Vector3(0, 0, 0));
-  mesh.rotation.z = weapon.id === "gun" ? 0 : -0.45;
+  const size: [number, number, number] = weapon.id === "gun" ? [1.15, 0.34, 0.5] : weapon.id === "knife" ? [0.16, 1.15, 0.12] : [0.24, 1.7, 0.24];
+  const mesh = makeBox(size, color, new THREE.Vector3(0.18, 0.24, -0.92));
+  mesh.rotation.set(weapon.id === "gun" ? 0 : -0.95, weapon.id === "gun" ? -0.1 : 0.08, weapon.id === "gun" ? 0 : -0.35);
   group.add(mesh);
+
+  if (weapon.id === "gun") {
+    group.add(makeBox([0.36, 0.48, 0.22], 0x111315, new THREE.Vector3(-0.16, -0.02, -0.58)));
+  }
   return group;
+}
+
+function chunkColor(cx: number, cz: number, area: Area) {
+  const hash = Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453);
+  const variation = Math.floor((hash % 1) * 18);
+  if (area === "city") return new THREE.Color(0x24282a).offsetHSL(0, 0, variation / 500);
+  return new THREE.Color(0x263820).offsetHSL(0.02, 0.02, variation / 420);
+}
+
+function addChunkField(group: THREE.Group, center: THREE.Vector3, area: Area) {
+  const centerCx = Math.floor(center.x / chunkSize);
+  const centerCz = Math.floor(center.z / chunkSize);
+  for (let dz = -3; dz <= 3; dz += 1) {
+    for (let dx = -3; dx <= 3; dx += 1) {
+      const cx = centerCx + dx;
+      const cz = centerCz + dz;
+      const tile = new THREE.Mesh(
+        new THREE.BoxGeometry(chunkSize, 0.08, chunkSize),
+        new THREE.MeshStandardMaterial({ color: chunkColor(cx, cz, area), roughness: 0.96 }),
+      );
+      tile.position.set(cx * chunkSize + chunkSize / 2, -0.06, cz * chunkSize + chunkSize / 2);
+      tile.receiveShadow = true;
+      group.add(tile);
+    }
+  }
 }
 
 export default function ThreeScene({
@@ -142,6 +188,7 @@ export default function ThreeScene({
   zombies,
   objects,
   currentWeapon,
+  flashlightOn,
 }: ThreeSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
@@ -150,6 +197,8 @@ export default function ThreeScene({
     camera: THREE.PerspectiveCamera;
     dynamic: THREE.Group;
     hand: THREE.Group;
+    flashlight: THREE.SpotLight;
+    flashlightTarget: THREE.Object3D;
     itemTexture?: THREE.Texture;
     animation: number;
   } | null>(null);
@@ -166,12 +215,12 @@ export default function ThreeScene({
     root.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(area === "city" ? 0x202833 : 0x6d8ec5);
-    scene.fog = new THREE.Fog(area === "city" ? 0x202833 : 0x7d8c78, 45, 120);
+    scene.background = new THREE.Color(area === "city" ? 0x07080c : 0x080d0b);
+    scene.fog = new THREE.Fog(area === "city" ? 0x07080c : 0x080d0b, 28, 88);
 
     const camera = new THREE.PerspectiveCamera(72, root.clientWidth / root.clientHeight, 0.1, 180);
-    const hemi = new THREE.HemisphereLight(0xd7e9ff, 0x253126, 1.75);
-    const sun = new THREE.DirectionalLight(0xffe0a3, 2.7);
+    const hemi = new THREE.HemisphereLight(0xb8c8d9, 0x151a15, 0.42);
+    const sun = new THREE.DirectionalLight(0xffe0a3, 0.58);
     sun.position.set(-26, 46, 18);
     sun.castShadow = true;
     sun.shadow.camera.left = -60;
@@ -180,10 +229,7 @@ export default function ThreeScene({
     sun.shadow.camera.bottom = -60;
     scene.add(hemi, sun);
 
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(130, 130, 26, 26),
-      new THREE.MeshStandardMaterial({ color: area === "city" ? 0x3f4242 : 0x546f46, roughness: 0.95 }),
-    );
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(130, 130, 26, 26), new THREE.MeshStandardMaterial({ color: 0x25341f, roughness: 0.95 }));
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     scene.add(ground);
@@ -201,7 +247,13 @@ export default function ThreeScene({
 
     const dynamic = new THREE.Group();
     const hand = new THREE.Group();
-    scene.add(dynamic, hand);
+    const flashlight = new THREE.SpotLight(0xfff0bd, 0, 42, Math.PI / 7, 0.54, 1.15);
+    const flashlightTarget = new THREE.Object3D();
+    flashlight.castShadow = true;
+    flashlight.shadow.mapSize.width = 1024;
+    flashlight.shadow.mapSize.height = 1024;
+    flashlight.target = flashlightTarget;
+    scene.add(dynamic, hand, flashlight, flashlightTarget);
 
     new THREE.TextureLoader().load("/items-sprite.png", (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -224,7 +276,7 @@ export default function ThreeScene({
       if (stateRef.current) stateRef.current.animation = requestAnimationFrame(render);
     };
 
-    stateRef.current = { renderer, scene, camera, dynamic, hand, animation: requestAnimationFrame(render) };
+    stateRef.current = { renderer, scene, camera, dynamic, hand, flashlight, flashlightTarget, animation: requestAnimationFrame(render) };
 
     return () => {
       window.removeEventListener("resize", onResize);
@@ -241,9 +293,10 @@ export default function ThreeScene({
     if (!state) return;
 
     const indoors = area === "countryside" && !outside;
-    state.scene.background = new THREE.Color(indoors ? 0x10110f : area === "city" ? 0x202833 : 0x6d8ec5);
-    state.scene.fog = new THREE.Fog(indoors ? 0x10110f : area === "city" ? 0x202833 : 0x7d8c78, indoors ? 30 : 45, indoors ? 82 : 120);
+    state.scene.background = new THREE.Color(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b);
+    state.scene.fog = new THREE.Fog(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b, indoors ? 16 : 24, indoors ? 58 : 96);
     state.dynamic.clear();
+    addChunkField(state.dynamic, toWorld(position), area);
 
     if (indoors) {
       addInteriorRoom(state.dynamic);
@@ -276,11 +329,20 @@ export default function ThreeScene({
       const model = makeZombie();
       model.position.copy(toWorld(zombie));
       model.lookAt(toWorld(position));
+      addZombieHealthBar(model, zombie.hp, area === "city" ? 45 : 35);
       state.dynamic.add(model);
     });
 
     items.filter((item) => item.area === area).forEach((item) => {
       const base = toWorld(item);
+      if (item.id === "battery") {
+        const battery = new THREE.Group();
+        battery.position.copy(base.setY(0.72));
+        battery.add(makeBox([1.05, 0.5, 0.58], 0xd8ca52, new THREE.Vector3(0, 0, 0)));
+        battery.add(makeBox([0.18, 0.28, 0.34], 0x363c35, new THREE.Vector3(0.62, 0, 0)));
+        state.dynamic.add(battery);
+        return;
+      }
       const material = state.itemTexture
         ? new THREE.MeshBasicMaterial({ map: makeItemTexture(state.itemTexture, item.sprite), transparent: true })
         : new THREE.MeshStandardMaterial({ color: 0xe2bb55 });
@@ -307,21 +369,27 @@ export default function ThreeScene({
     const pos = toWorld(position);
     const yaw = (angle * Math.PI) / 180;
     const pitchRadians = THREE.MathUtils.degToRad(pitch);
-    const forward = new THREE.Vector3(Math.sin(yaw), Math.sin(pitchRadians), -Math.cos(yaw));
+    const forward = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitchRadians), Math.sin(pitchRadians), -Math.cos(yaw) * Math.cos(pitchRadians)).normalize();
     const flatForward = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
 
     if (viewMode === "first") {
       state.camera.position.copy(pos).add(new THREE.Vector3(0, 3.1 + (walking ? Math.sin(performance.now() / 90) * 0.07 : 0), 0));
       state.camera.lookAt(state.camera.position.clone().add(forward));
-      state.hand.position.copy(state.camera.position).add(flatForward.clone().multiplyScalar(2.05)).add(new THREE.Vector3(0.85, -0.82, -0.22));
-      state.hand.rotation.set(-0.45, yaw - 0.52, -0.2);
+      state.hand.position.copy(state.camera.position).add(flatForward.clone().multiplyScalar(1.2)).add(right.clone().multiplyScalar(0.72)).add(new THREE.Vector3(0, -0.78, 0));
+      state.hand.rotation.set(-0.28 + pitchRadians * 0.34, yaw - 0.2, -0.16);
       state.hand.visible = true;
     } else {
       state.camera.position.copy(pos).add(new THREE.Vector3(-Math.sin(yaw) * 12, 9, Math.cos(yaw) * 12));
       state.camera.lookAt(pos.clone().add(new THREE.Vector3(0, 1.8, 0)));
       state.hand.visible = false;
     }
-  }, [position, angle, pitch, viewMode, walking]);
+
+    state.flashlight.visible = flashlightOn;
+    state.flashlight.intensity = flashlightOn ? (viewMode === "first" ? 5.6 : 3.4) : 0;
+    state.flashlight.position.copy(state.camera.position).add(new THREE.Vector3(0, -0.08, 0));
+    state.flashlightTarget.position.copy(state.camera.position).add(forward.clone().multiplyScalar(32));
+  }, [position, angle, pitch, viewMode, walking, flashlightOn]);
 
   return <div className="three-scene" ref={rootRef} aria-hidden="true" />;
 }
