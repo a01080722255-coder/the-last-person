@@ -27,3 +27,7 @@ This is the update log. Write like this. 0.00.1
 - Added a battery pickup inside the house and a flashlight battery UI.
 - Improved the first-person held weapon pose with a visible hand and forearm.
 
+0.00.7
+- Hardened the Three.js cleanup path so refreshing the page cannot crash while the WebGL canvas is being removed.
+- Added WebGL context-loss handling during refresh and switched to the current Three.js shadow map option.
+

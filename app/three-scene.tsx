@@ -80,6 +80,19 @@ function makeItemTexture(source: THREE.Texture, sprite: number) {
   return texture;
 }
 
+function disposeObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.geometry) mesh.geometry.dispose();
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      material.forEach((entry) => entry.dispose());
+    } else if (material) {
+      material.dispose();
+    }
+  });
+}
+
 function makeZombie() {
   const zombie = new THREE.Group();
   const body = makeBox([1.25, 2.25, 0.72], 0x536246, new THREE.Vector3(0, 1.25, 0));
@@ -211,8 +224,12 @@ export default function ThreeScene({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(root.clientWidth, root.clientHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     root.appendChild(renderer.domElement);
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(area === "city" ? 0x07080c : 0x080d0b);
@@ -280,10 +297,13 @@ export default function ThreeScene({
 
     return () => {
       window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       const current = stateRef.current;
       if (current) cancelAnimationFrame(current.animation);
+      disposeObject(scene);
       renderer.dispose();
-      root.removeChild(renderer.domElement);
+      renderer.forceContextLoss();
+      if (renderer.domElement.parentNode === root) root.removeChild(renderer.domElement);
       stateRef.current = null;
     };
   }, []);
