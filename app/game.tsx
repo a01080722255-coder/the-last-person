@@ -338,9 +338,9 @@ export default function Game() {
         return { zombie, range, aimError };
       })
       .filter(({ range, aimError }) => {
-        const rangeLimit = weapon.id === "gun" ? 46 : weapon.id === "knife" ? 14 : 18;
-        const aimLimit = weapon.id === "gun" ? 11 : weapon.id === "knife" ? 18 : 24;
-        return range <= rangeLimit && aimError <= aimLimit;
+        const rangeLimit = weapon.id === "gun" ? 52 : weapon.id === "knife" ? 18 : 24;
+        const aimLimit = weapon.id === "gun" ? 18 : weapon.id === "knife" ? 32 : 42;
+        return range <= rangeLimit && (aimError <= aimLimit || range <= 8);
       })
       .sort((a, b) => a.aimError - b.aimError || a.range - b.range)[0]?.zombie;
 
@@ -363,7 +363,7 @@ export default function Game() {
       setXp((value) => value + (area === "city" ? 15 : 10));
       showMessage("\uc880\ube44\uac00 \uc4f0\ub7ec\uc84c\ub2e4. \uacbd\ud5d8\uce58\ub97c \uc5bb\uc5c8\ub2e4.");
     } else {
-      showMessage(`${weapon.name} \uba85\uc911. \uc880\ube44\uac00 \ube44\ud2c0\uac70\ub9b0\ub2e4.`);
+      showMessage(`${weapon.name} 명중. 좀비 체력 ${Math.max(0, target.hp - (weapon.damage ?? 0))}`);
     }
   }, [aliveZombies, angle, area, cooldownUntil, currentWeapon, gameOver, position, showMessage]);
 

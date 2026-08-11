@@ -53,6 +53,7 @@ type ThreeSceneProps = {
 
 const worldScale = 1.25;
 const chunkSize = 16;
+const materialCache = new Map<number, THREE.MeshStandardMaterial>();
 
 function toWorld(value: { x: number; y: number }) {
   return new THREE.Vector3((value.x - 50) * worldScale, 0, (value.y - 50) * worldScale);
@@ -61,12 +62,48 @@ function toWorld(value: { x: number; y: number }) {
 function makeBox(size: [number, number, number], color: number, position: THREE.Vector3) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(size[0], size[1], size[2]),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.82 }),
+    makeBlockMaterial(color),
   );
   mesh.position.copy(position);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+function makeBlockMaterial(color: number) {
+  const cached = materialCache.get(color);
+  if (cached) return cached;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext("2d");
+  const base = new THREE.Color(color);
+  if (context) {
+    context.fillStyle = `#${base.getHexString()}`;
+    context.fillRect(0, 0, 64, 64);
+    for (let y = 0; y < 64; y += 8) {
+      for (let x = 0; x < 64; x += 8) {
+        const n = Math.sin((x + 1) * 12.9898 + (y + 1) * 78.233 + color) * 43758.5453;
+        const shade = (n - Math.floor(n)) * 0.16 - 0.08;
+        const pixel = base.clone().offsetHSL(0, 0, shade);
+        context.fillStyle = `#${pixel.getHexString()}`;
+        context.fillRect(x, y, 8, 8);
+      }
+    }
+    context.strokeStyle = "rgba(0,0,0,0.18)";
+    context.lineWidth = 2;
+    context.strokeRect(0, 0, 64, 64);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: 0.88 });
+  material.userData.shared = true;
+  texture.userData.shared = true;
+  materialCache.set(color, material);
+  return material;
 }
 
 function makeItemTexture(source: THREE.Texture, sprite: number) {
@@ -86,9 +123,17 @@ function disposeObject(object: THREE.Object3D) {
     if (mesh.geometry) mesh.geometry.dispose();
     const material = mesh.material;
     if (Array.isArray(material)) {
-      material.forEach((entry) => entry.dispose());
+      material.forEach((entry) => {
+        if (!entry.userData.shared) {
+          if ("map" in entry && entry.map && !entry.map.userData.shared) entry.map.dispose();
+          entry.dispose();
+        }
+      });
     } else if (material) {
-      material.dispose();
+      if (!material.userData.shared) {
+        if ("map" in material && material.map && !material.map.userData.shared) material.map.dispose();
+        material.dispose();
+      }
     }
   });
 }
@@ -114,20 +159,41 @@ function makeZombie() {
 
 function addZombieHealthBar(zombie: THREE.Group, hp: number, maxHp: number) {
   const ratio = THREE.MathUtils.clamp(hp / maxHp, 0, 1);
-  const back = makeBox([1.55, 0.12, 0.08], 0x120f0e, new THREE.Vector3(0, 3.68, -0.1));
-  const color = ratio > 0.5 ? 0x63d27d : ratio > 0.25 ? 0xe1bf54 : 0xe45b4f;
-  const fill = makeBox([1.4 * ratio, 0.09, 0.09], color, new THREE.Vector3(-0.7 + 0.7 * ratio, 3.69, -0.15));
-  back.castShadow = false;
-  fill.castShadow = false;
-  zombie.add(back, fill);
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 24;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.fillStyle = "rgba(0,0,0,0.82)";
+    context.fillRect(0, 0, 128, 24);
+    context.strokeStyle = "rgba(255,255,255,0.7)";
+    context.lineWidth = 3;
+    context.strokeRect(1.5, 1.5, 125, 21);
+    context.fillStyle = ratio > 0.5 ? "#63d27d" : ratio > 0.25 ? "#e1bf54" : "#e45b4f";
+    context.fillRect(7, 7, Math.max(4, 114 * ratio), 10);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.name = "zombie-health";
+  sprite.position.set(0, 3.75, 0);
+  sprite.scale.set(2.5, 0.48, 1);
+  sprite.renderOrder = 20;
+  zombie.add(sprite);
 }
 
 function makePlayer() {
   const player = new THREE.Group();
   const body = makeBox([1, 1.8, 0.6], 0x59675f, new THREE.Vector3(0, 1.2, 0));
   const head = makeBox([0.72, 0.72, 0.72], 0x171b1a, new THREE.Vector3(0, 2.42, 0));
-  const arm = makeBox([0.3, 1.1, 0.3], 0x3d4b45, new THREE.Vector3(0.72, 1.2, -0.1));
-  player.add(body, head, arm);
+  const leftArm = makeBox([0.3, 1.1, 0.3], 0x3d4b45, new THREE.Vector3(-0.72, 1.2, -0.1));
+  const rightArm = makeBox([0.3, 1.1, 0.3], 0x3d4b45, new THREE.Vector3(0.72, 1.2, -0.1));
+  const leftLeg = makeBox([0.32, 0.9, 0.34], 0x202624, new THREE.Vector3(-0.25, 0.15, 0));
+  const rightLeg = makeBox([0.32, 0.9, 0.34], 0x202624, new THREE.Vector3(0.25, 0.15, 0));
+  player.add(body, head, leftArm, rightArm, leftLeg, rightLeg);
   return player;
 }
 
@@ -300,6 +366,11 @@ export default function ThreeScene({
     window.addEventListener("resize", onResize);
 
     const render = () => {
+      const activeCamera = camera;
+      stateRef.current?.zombieModels.forEach((zombie) => {
+        const health = zombie.getObjectByName("zombie-health");
+        if (health) health.quaternion.copy(activeCamera.quaternion);
+      });
       renderer.render(scene, camera);
       if (stateRef.current) stateRef.current.animation = requestAnimationFrame(render);
     };
@@ -325,7 +396,6 @@ export default function ThreeScene({
       if (current) cancelAnimationFrame(current.animation);
       disposeObject(scene);
       renderer.dispose();
-      renderer.forceContextLoss();
       if (renderer.domElement.parentNode === root) root.removeChild(renderer.domElement);
       stateRef.current = null;
     };

@@ -38,3 +38,11 @@ This is the update log. Write like this. 0.00.1
 - Memoized visible world item and object lists to avoid unnecessary scene work during movement.
 - Updated the server-render test to validate the current game shell instead of the removed starter skeleton.
 
+0.00.9
+- Upgraded block textures with cached pixel-style procedural materials while preserving the optimized scene structure.
+- Made zombie health bars brighter, billboarded, and depth-independent so they stay visible.
+- Made melee and gun hit detection more forgiving and show remaining zombie health on hit.
+- Added the missing third-person player arm and legs.
+- Removed forced WebGL context loss during cleanup to prevent refresh crashes.
+- Added one-time refresh recovery for stale dynamically imported game chunks after deployment.
+
