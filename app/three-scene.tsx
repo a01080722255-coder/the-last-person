@@ -567,14 +567,23 @@ export default function ThreeScene({
     const yaw = (angle * Math.PI) / 180;
     const pitchRadians = THREE.MathUtils.degToRad(pitch);
     const forward = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitchRadians), Math.sin(pitchRadians), -Math.cos(yaw) * Math.cos(pitchRadians)).normalize();
-    const flatForward = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
-    const right = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
 
     if (viewMode === "first") {
       state.camera.position.copy(pos).add(new THREE.Vector3(0, 3.1 + (walking ? Math.sin(performance.now() / 90) * 0.07 : 0), 0));
       state.camera.lookAt(state.camera.position.clone().add(forward));
-      state.hand.position.copy(state.camera.position).add(flatForward.clone().multiplyScalar(1.2)).add(right.clone().multiplyScalar(0.72)).add(new THREE.Vector3(0, -0.78, 0));
-      state.hand.rotation.set(-0.28 + pitchRadians * 0.34, yaw - 0.2, -0.16);
+      state.camera.updateMatrixWorld();
+      const cameraRight = new THREE.Vector3().setFromMatrixColumn(state.camera.matrixWorld, 0);
+      const cameraUp = new THREE.Vector3().setFromMatrixColumn(state.camera.matrixWorld, 1);
+      const cameraForward = new THREE.Vector3().setFromMatrixColumn(state.camera.matrixWorld, 2).multiplyScalar(-1);
+      state.hand.position
+        .copy(state.camera.position)
+        .add(cameraForward.multiplyScalar(1.18))
+        .add(cameraRight.multiplyScalar(0.68))
+        .add(cameraUp.multiplyScalar(-0.72));
+      state.hand.quaternion.copy(state.camera.quaternion);
+      state.hand.rotateX(-0.34);
+      state.hand.rotateY(-0.18);
+      state.hand.rotateZ(-0.1);
       state.hand.visible = true;
     } else {
       state.camera.position.copy(pos).add(new THREE.Vector3(-Math.sin(yaw) * 12, 9, Math.cos(yaw) * 12));

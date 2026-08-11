@@ -207,6 +207,7 @@ export default function Game() {
   const jumpVelocity = useRef(0);
   const jumpRequested = useRef(false);
   const zombieSpawnElapsed = useRef(0);
+  const itemSpawnElapsed = useRef(0);
 
   const currentWeapon = inventory[selectedSlot]?.kind === "weapon" ? inventory[selectedSlot] : undefined;
   const aliveZombies = useMemo(() => zombies.filter((zombie) => zombie.area === area && zombie.hp > 0), [area, zombies]);
@@ -434,6 +435,7 @@ export default function Game() {
     jumpVelocity.current = 0;
     jumpOffsetRef.current = 0;
     zombieSpawnElapsed.current = 0;
+    itemSpawnElapsed.current = 0;
     setJumpOffset(0);
     setEatingSprite(null);
     setFlashlightOn(true);
@@ -655,6 +657,39 @@ export default function Game() {
               area,
             };
             return [...current, zombie];
+          });
+        }
+
+        itemSpawnElapsed.current += delta;
+        if (itemSpawnElapsed.current >= 4.5) {
+          itemSpawnElapsed.current = 0;
+          setWorldItems((current) => {
+            const playerPosition = positionRef.current;
+            const nearbyFood = current.filter(
+              (item) => item.area === area && item.kind === "food" && distance(item, playerPosition) < 170,
+            ).length;
+            const foodLimit = area === "city" ? 12 : 9;
+            const trimmed = current.filter((item) => {
+              if (!item.id.startsWith("forage-")) return true;
+              return item.area !== area || distance(item, playerPosition) < 230;
+            });
+            if (nearbyFood >= foodLimit) return trimmed;
+
+            const seed = Math.sin((playerPosition.x + current.length * 31.7) * 18.371 + playerPosition.y * 44.029);
+            const angleToSpawn = seed * Math.PI * 2;
+            const range = 42 + Math.abs(seed) * 38;
+            const foodPool = area === "city"
+              ? [items.juice, items.bread, items.cookedMeat, items.rawMeat]
+              : [items.apple, items.grapes, items.bread, items.juice];
+            const food = foodPool[Math.abs(Math.floor(seed * 1000)) % foodPool.length];
+            const worldItem: WorldItem = {
+              ...food,
+              id: `forage-${food.id}-${Date.now().toString(36)}-${current.length}`,
+              x: playerPosition.x + Math.cos(angleToSpawn) * range,
+              y: playerPosition.y + Math.sin(angleToSpawn) * range,
+              area,
+            };
+            return [...trimmed, worldItem];
           });
         }
       }

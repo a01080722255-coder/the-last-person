@@ -53,3 +53,8 @@ This is the update log. Write like this. 0.00.1
 - Let outside-world zombies move beyond the original map bounds and spawn near the player in distant chunks.
 - Hardened refresh recovery so stale chunk reloads cannot loop repeatedly.
 
+0.00.11
+- Added outside-world food spawning so infinite chunks keep producing survival items near the player.
+- Limited spawned food density and cleaned up faraway spawned food to protect performance during long exploration.
+- Re-anchored the first-person hand and weapon to the camera so the arm no longer points away from the view.
+
