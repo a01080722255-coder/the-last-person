@@ -31,3 +31,10 @@ This is the update log. Write like this. 0.00.1
 - Hardened the Three.js cleanup path so refreshing the page cannot crash while the WebGL canvas is being removed.
 - Added WebGL context-loss handling during refresh and switched to the current Three.js shadow map option.
 
+0.00.8
+- Optimized the Three.js scene so chunks, world objects, entities, and the held weapon rebuild only when their own data changes.
+- Reduced per-frame React updates by stabilizing walking state and updating zombie movement at a lower simulation tick.
+- Lowered WebGL pixel ratio and disabled expensive realtime shadows while keeping the blocky shapes and world layout intact.
+- Memoized visible world item and object lists to avoid unnecessary scene work during movement.
+- Updated the server-render test to validate the current game shell instead of the removed starter skeleton.
+

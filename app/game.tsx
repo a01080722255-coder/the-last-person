@@ -192,9 +192,11 @@ export default function Game() {
   const footstepAudio = useRef<HTMLAudioElement | null>(null);
   const lastDamageAt = useRef(0);
   const positionRef = useRef(position);
+  const angleRef = useRef(angle);
+  const walkingRef = useRef(false);
 
   const currentWeapon = inventory[selectedSlot]?.kind === "weapon" ? inventory[selectedSlot] : undefined;
-  const aliveZombies = zombies.filter((zombie) => zombie.area === area && zombie.hp > 0);
+  const aliveZombies = useMemo(() => zombies.filter((zombie) => zombie.area === area && zombie.hp > 0), [area, zombies]);
 
   const nearestItem = useMemo(() => {
     return worldItems
@@ -403,6 +405,7 @@ export default function Game() {
     setCooldownUntil(0);
     setMessage(text.opening);
     setWalking(false);
+    walkingRef.current = false;
     setEatingSprite(null);
     setFlashlightOn(true);
     setFlashlightBattery(50);
@@ -417,6 +420,10 @@ export default function Game() {
   useEffect(() => {
     positionRef.current = position;
   }, [position]);
+
+  useEffect(() => {
+    angleRef.current = angle;
+  }, [angle]);
 
   useEffect(() => {
     pickupAudio.current = new Audio("/sounds/pickup.mp3");
@@ -481,13 +488,17 @@ export default function Game() {
 
   useEffect(() => {
     if (!started || gameOver) {
-      setWalking(false);
+      if (walkingRef.current) {
+        walkingRef.current = false;
+        setWalking(false);
+      }
       stopFootsteps();
       return;
     }
 
     let animation = 0;
     let previous = performance.now();
+    let zombieElapsed = 0;
 
     const step = (now: number) => {
       const delta = Math.min(0.05, (now - previous) / 1000);
@@ -495,7 +506,7 @@ export default function Game() {
       const speed = area === "city" ? 15 : 17;
       const forwardInput = (keys.current.has("w") ? 1 : 0) - (keys.current.has("s") ? 1 : 0);
       const strafeInput = (keys.current.has("d") ? 1 : 0) - (keys.current.has("a") ? 1 : 0);
-      const radians = (angle * Math.PI) / 180;
+      const radians = (angleRef.current * Math.PI) / 180;
       const forwardX = Math.sin(radians);
       const forwardY = -Math.cos(radians);
       const rightX = Math.cos(radians);
@@ -504,7 +515,10 @@ export default function Game() {
       const dy = forwardY * forwardInput + rightY * strafeInput;
       const moving = Boolean(dx || dy);
 
-      setWalking(moving);
+      if (walkingRef.current !== moving) {
+        walkingRef.current = moving;
+        setWalking(moving);
+      }
       if (moving) {
         const length = Math.hypot(dx, dy);
         const nextX = (currentX: number) => {
@@ -515,7 +529,6 @@ export default function Game() {
           const proposed = currentY + (dy / length) * speed * delta;
           return outside ? proposed : clamp(proposed, indoorMinY, indoorMaxY);
         };
-        setStepPhase((value) => value + delta * 12);
         setPosition((current) => {
           const x = nextX(current.x);
           const y = nextY(current.y);
@@ -523,28 +536,33 @@ export default function Game() {
         });
       }
 
-      setZombies((current) =>
-        current.map((zombie) => {
-          if (zombie.area !== area || zombie.hp <= 0) return zombie;
-          const playerPosition = positionRef.current;
-          const toPlayer = { x: playerPosition.x - zombie.x, y: playerPosition.y - zombie.y };
-          const range = Math.hypot(toPlayer.x, toPlayer.y);
-          if (range > 48 || range < 4) return zombie;
-          const zombieSpeed = area === "city" ? 5.8 : 3.8;
-          return {
-            ...zombie,
-            x: clamp(zombie.x + (toPlayer.x / range) * zombieSpeed * delta, mapMin, mapMax),
-            y: clamp(zombie.y + (toPlayer.y / range) * zombieSpeed * delta, mapMin, mapMax),
-          };
-        }),
-      );
+      zombieElapsed += delta;
+      if (zombieElapsed >= 0.12) {
+        const zombieDelta = zombieElapsed;
+        zombieElapsed = 0;
+        setZombies((current) =>
+          current.map((zombie) => {
+            if (zombie.area !== area || zombie.hp <= 0) return zombie;
+            const playerPosition = positionRef.current;
+            const toPlayer = { x: playerPosition.x - zombie.x, y: playerPosition.y - zombie.y };
+            const range = Math.hypot(toPlayer.x, toPlayer.y);
+            if (range > 48 || range < 4) return zombie;
+            const zombieSpeed = area === "city" ? 5.8 : 3.8;
+            return {
+              ...zombie,
+              x: clamp(zombie.x + (toPlayer.x / range) * zombieSpeed * zombieDelta, mapMin, mapMax),
+              y: clamp(zombie.y + (toPlayer.y / range) * zombieSpeed * zombieDelta, mapMin, mapMax),
+            };
+          }),
+        );
+      }
 
       animation = requestAnimationFrame(step);
     };
 
     animation = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animation);
-  }, [angle, area, gameOver, outside, position.x, position.y, started, stopFootsteps]);
+  }, [area, gameOver, outside, started, stopFootsteps]);
 
   useEffect(() => {
     if (walking) {
@@ -583,8 +601,14 @@ export default function Game() {
 
   const healthColor = health > 55 ? "#66d47e" : health > 25 ? "#e3c45c" : "#ef6a5b";
   const cooldownLeft = Math.max(0, cooldownUntil - Date.now());
-  const visibleObjects = interactables.filter((object) => object.area === area && (outside || object.type === "door"));
-  const visibleItems = worldItems.filter((item) => item.area === area && (outside || item.kind === "battery"));
+  const visibleObjects = useMemo(
+    () => interactables.filter((object) => object.area === area && (outside || object.type === "door")),
+    [area, outside],
+  );
+  const visibleItems = useMemo(
+    () => worldItems.filter((item) => item.area === area && (outside || item.kind === "battery")),
+    [area, outside, worldItems],
+  );
 
   return (
     <main className={`game-shell ${area} ${viewMode} ${outside ? "outside" : "inside"} ${walking ? "walking" : ""} ${eatingSprite !== null ? "eating" : ""}`} style={cameraVars}>

@@ -93,6 +93,11 @@ function disposeObject(object: THREE.Object3D) {
   });
 }
 
+function clearGroup(group: THREE.Group) {
+  group.children.forEach((child) => disposeObject(child));
+  group.clear();
+}
+
 function makeZombie() {
   const zombie = new THREE.Group();
   const body = makeBox([1.25, 2.25, 0.72], 0x536246, new THREE.Vector3(0, 1.25, 0));
@@ -208,8 +213,12 @@ export default function ThreeScene({
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
-    dynamic: THREE.Group;
+    world: THREE.Group;
+    chunks: THREE.Group;
+    entities: THREE.Group;
     hand: THREE.Group;
+    player?: THREE.Group;
+    zombieModels: THREE.Group[];
     flashlight: THREE.SpotLight;
     flashlightTarget: THREE.Object3D;
     itemTexture?: THREE.Texture;
@@ -220,8 +229,8 @@ export default function ThreeScene({
     const root = rootRef.current;
     if (!root) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(root.clientWidth, root.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -239,7 +248,7 @@ export default function ThreeScene({
     const hemi = new THREE.HemisphereLight(0xb8c8d9, 0x151a15, 0.42);
     const sun = new THREE.DirectionalLight(0xffe0a3, 0.58);
     sun.position.set(-26, 46, 18);
-    sun.castShadow = true;
+    sun.castShadow = false;
     sun.shadow.camera.left = -60;
     sun.shadow.camera.right = 60;
     sun.shadow.camera.top = 60;
@@ -262,15 +271,17 @@ export default function ThreeScene({
     roadB.position.y = 0.05;
     scene.add(roadA, roadB);
 
-    const dynamic = new THREE.Group();
+    const world = new THREE.Group();
+    const chunks = new THREE.Group();
+    const entities = new THREE.Group();
     const hand = new THREE.Group();
     const flashlight = new THREE.SpotLight(0xfff0bd, 0, 42, Math.PI / 7, 0.54, 1.15);
     const flashlightTarget = new THREE.Object3D();
-    flashlight.castShadow = true;
-    flashlight.shadow.mapSize.width = 1024;
-    flashlight.shadow.mapSize.height = 1024;
+    flashlight.castShadow = false;
+    flashlight.shadow.mapSize.width = 512;
+    flashlight.shadow.mapSize.height = 512;
     flashlight.target = flashlightTarget;
-    scene.add(dynamic, hand, flashlight, flashlightTarget);
+    scene.add(chunks, world, entities, hand, flashlight, flashlightTarget);
 
     new THREE.TextureLoader().load("/items-sprite.png", (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -293,7 +304,19 @@ export default function ThreeScene({
       if (stateRef.current) stateRef.current.animation = requestAnimationFrame(render);
     };
 
-    stateRef.current = { renderer, scene, camera, dynamic, hand, flashlight, flashlightTarget, animation: requestAnimationFrame(render) };
+    stateRef.current = {
+      renderer,
+      scene,
+      camera,
+      world,
+      chunks,
+      entities,
+      hand,
+      zombieModels: [],
+      flashlight,
+      flashlightTarget,
+      animation: requestAnimationFrame(render),
+    };
 
     return () => {
       window.removeEventListener("resize", onResize);
@@ -315,22 +338,21 @@ export default function ThreeScene({
     const indoors = area === "countryside" && !outside;
     state.scene.background = new THREE.Color(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b);
     state.scene.fog = new THREE.Fog(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b, indoors ? 16 : 24, indoors ? 58 : 96);
-    state.dynamic.clear();
-    addChunkField(state.dynamic, toWorld(position), area);
+    clearGroup(state.world);
 
     if (indoors) {
-      addInteriorRoom(state.dynamic);
+      addInteriorRoom(state.world);
     } else if (area === "countryside") {
       const house = makeBox([13, 4, 9], 0x6f5a3e, toWorld({ x: 41, y: 73 }).setY(2));
       const roof = makeBox([15, 2, 11], 0x3d332b, toWorld({ x: 41, y: 73 }).setY(5.2));
-      state.dynamic.add(house, roof);
+      state.world.add(house, roof);
     } else {
       [
         { x: 16, y: 16, w: 9, h: 18, d: 9 },
         { x: 68, y: 18, w: 10, h: 12, d: 10 },
         { x: 58, y: 67, w: 18, h: 9, d: 10 },
       ].forEach((building) => {
-        state.dynamic.add(makeBox([building.w, building.h, building.d], 0x373c40, toWorld(building).setY(building.h / 2)));
+        state.world.add(makeBox([building.w, building.h, building.d], 0x373c40, toWorld(building).setY(building.h / 2)));
       });
     }
 
@@ -342,15 +364,34 @@ export default function ThreeScene({
           : object.type === "bench"
             ? makeBox([4.2, 1, 1.7], 0x936337, base.setY(0.55))
             : makeBox([2.2, 3.3, 0.45], outside ? 0x4b3828 : 0x9b6a44, base.setY(1.7));
-      state.dynamic.add(mesh);
+      state.world.add(mesh);
     });
+  }, [area, objects, outside]);
+
+  const chunkX = Math.floor(toWorld(position).x / chunkSize);
+  const chunkZ = Math.floor(toWorld(position).z / chunkSize);
+
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    clearGroup(state.chunks);
+    addChunkField(state.chunks, new THREE.Vector3(chunkX * chunkSize, 0, chunkZ * chunkSize), area);
+  }, [area, chunkX, chunkZ]);
+
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    clearGroup(state.entities);
+    state.zombieModels = [];
+    state.player = undefined;
 
     zombies.filter((zombie) => zombie.area === area && zombie.hp > 0).forEach((zombie) => {
       const model = makeZombie();
       model.position.copy(toWorld(zombie));
       model.lookAt(toWorld(position));
       addZombieHealthBar(model, zombie.hp, area === "city" ? 45 : 35);
-      state.dynamic.add(model);
+      state.zombieModels.push(model);
+      state.entities.add(model);
     });
 
     items.filter((item) => item.area === area).forEach((item) => {
@@ -360,7 +401,7 @@ export default function ThreeScene({
         battery.position.copy(base.setY(0.72));
         battery.add(makeBox([1.05, 0.5, 0.58], 0xd8ca52, new THREE.Vector3(0, 0, 0)));
         battery.add(makeBox([0.18, 0.28, 0.34], 0x363c35, new THREE.Vector3(0.62, 0, 0)));
-        state.dynamic.add(battery);
+        state.entities.add(battery);
         return;
       }
       const material = state.itemTexture
@@ -370,18 +411,23 @@ export default function ThreeScene({
       mesh.position.copy(base.setY(0.9));
       mesh.rotation.y = Math.PI;
       mesh.castShadow = true;
-      state.dynamic.add(mesh);
+      state.entities.add(mesh);
     });
 
-    const player = makePlayer();
-    player.position.copy(toWorld(position));
-    player.rotation.y = (angle * Math.PI) / 180;
-    if (viewMode === "third") state.dynamic.add(player);
+    if (viewMode === "third") {
+      const player = makePlayer();
+      state.player = player;
+      state.entities.add(player);
+    }
+  }, [area, items, zombies, viewMode]);
 
-    state.hand.clear();
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    clearGroup(state.hand);
     const weapon = makeWeapon(currentWeapon);
     if (weapon) state.hand.add(weapon);
-  }, [area, items, objects, zombies, position, angle, viewMode, outside, currentWeapon]);
+  }, [currentWeapon]);
 
   useEffect(() => {
     const state = stateRef.current;
@@ -404,6 +450,12 @@ export default function ThreeScene({
       state.camera.lookAt(pos.clone().add(new THREE.Vector3(0, 1.8, 0)));
       state.hand.visible = false;
     }
+
+    if (state.player) {
+      state.player.position.copy(pos);
+      state.player.rotation.y = yaw;
+    }
+    state.zombieModels.forEach((zombie) => zombie.lookAt(pos));
 
     state.flashlight.visible = flashlightOn;
     state.flashlight.intensity = flashlightOn ? (viewMode === "first" ? 5.6 : 3.4) : 0;
