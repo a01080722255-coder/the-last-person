@@ -341,7 +341,9 @@ export default function ThreeScene({
     camera: THREE.PerspectiveCamera;
     world: THREE.Group;
     chunks: THREE.Group;
-    entities: THREE.Group;
+    zombiesGroup: THREE.Group;
+    itemsGroup: THREE.Group;
+    playerGroup: THREE.Group;
     hand: THREE.Group;
     player?: THREE.Group;
     zombieModels: THREE.Group[];
@@ -399,7 +401,9 @@ export default function ThreeScene({
 
     const world = new THREE.Group();
     const chunks = new THREE.Group();
-    const entities = new THREE.Group();
+    const zombiesGroup = new THREE.Group();
+    const itemsGroup = new THREE.Group();
+    const playerGroup = new THREE.Group();
     const hand = new THREE.Group();
     const flashlight = new THREE.SpotLight(0xfff0bd, 0, 42, Math.PI / 7, 0.54, 1.15);
     const flashlightTarget = new THREE.Object3D();
@@ -407,7 +411,7 @@ export default function ThreeScene({
     flashlight.shadow.mapSize.width = 512;
     flashlight.shadow.mapSize.height = 512;
     flashlight.target = flashlightTarget;
-    scene.add(chunks, world, entities, hand, flashlight, flashlightTarget);
+    scene.add(chunks, world, zombiesGroup, itemsGroup, playerGroup, hand, flashlight, flashlightTarget);
 
     new THREE.TextureLoader().load("/items-sprite.png", (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -441,7 +445,9 @@ export default function ThreeScene({
       camera,
       world,
       chunks,
-      entities,
+      zombiesGroup,
+      itemsGroup,
+      playerGroup,
       hand,
       zombieModels: [],
       flashlight,
@@ -511,9 +517,8 @@ export default function ThreeScene({
   useEffect(() => {
     const state = stateRef.current;
     if (!state) return;
-    clearGroup(state.entities);
+    clearGroup(state.zombiesGroup);
     state.zombieModels = [];
-    state.player = undefined;
 
     zombies.filter((zombie) => zombie.area === area && zombie.hp > 0).forEach((zombie) => {
       const model = makeZombie();
@@ -521,9 +526,14 @@ export default function ThreeScene({
       model.lookAt(toWorld(position));
       addZombieHealthBar(model, zombie.hp, area === "city" ? 45 : 35);
       state.zombieModels.push(model);
-      state.entities.add(model);
+      state.zombiesGroup.add(model);
     });
+  }, [area, zombies]);
 
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    clearGroup(state.itemsGroup);
     items.filter((item) => item.area === area).forEach((item) => {
       const base = toWorld(item);
       if (item.id === "battery") {
@@ -531,7 +541,7 @@ export default function ThreeScene({
         battery.position.copy(base.setY(0.72));
         battery.add(makeBox([1.05, 0.5, 0.58], 0xd8ca52, new THREE.Vector3(0, 0, 0)));
         battery.add(makeBox([0.18, 0.28, 0.34], 0x363c35, new THREE.Vector3(0.62, 0, 0)));
-        state.entities.add(battery);
+        state.itemsGroup.add(battery);
         return;
       }
       const material = state.itemTexture
@@ -541,15 +551,21 @@ export default function ThreeScene({
       mesh.position.copy(base.setY(0.9));
       mesh.rotation.y = Math.PI;
       mesh.castShadow = true;
-      state.entities.add(mesh);
+      state.itemsGroup.add(mesh);
     });
+  }, [area, items]);
 
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    clearGroup(state.playerGroup);
+    state.player = undefined;
     if (viewMode === "third") {
       const player = makePlayer();
       state.player = player;
-      state.entities.add(player);
+      state.playerGroup.add(player);
     }
-  }, [area, items, zombies, viewMode]);
+  }, [viewMode]);
 
   useEffect(() => {
     const state = stateRef.current;

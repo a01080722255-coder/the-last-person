@@ -608,7 +608,7 @@ export default function Game() {
       }
 
       zombieElapsed += delta;
-      if (zombieElapsed >= 0.12) {
+      if (zombieElapsed >= 0.18) {
         const zombieDelta = zombieElapsed;
         zombieElapsed = 0;
         setZombies((current) =>

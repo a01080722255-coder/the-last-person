@@ -58,3 +58,7 @@ This is the update log. Write like this. 0.00.1
 - Limited spawned food density and cleaned up faraway spawned food to protect performance during long exploration.
 - Re-anchored the first-person hand and weapon to the camera so the arm no longer points away from the view.
 
+0.00.12
+- Split Three.js entities into separate zombie, item, and player render groups so movement updates rebuild less of the scene.
+- Reduced zombie simulation update frequency slightly to lower React and WebGL churn during exploration.
+
