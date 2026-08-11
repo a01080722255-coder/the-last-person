@@ -120,7 +120,7 @@ function makeItemTexture(source: THREE.Texture, sprite: number) {
 }
 
 function disposeObject(object: THREE.Object3D) {
-  object.traverse((child) => {
+  object.traverse((child: THREE.Object3D) => {
     const mesh = child as THREE.Mesh;
     if (mesh.geometry) mesh.geometry.dispose();
     const material = mesh.material;
@@ -141,7 +141,7 @@ function disposeObject(object: THREE.Object3D) {
 }
 
 function clearGroup(group: THREE.Group) {
-  group.children.forEach((child) => disposeObject(child));
+  group.children.forEach((child: THREE.Object3D) => disposeObject(child));
   group.clear();
 }
 
@@ -413,7 +413,7 @@ export default function ThreeScene({
     flashlight.target = flashlightTarget;
     scene.add(chunks, world, zombiesGroup, itemsGroup, playerGroup, hand, flashlight, flashlightTarget);
 
-    new THREE.TextureLoader().load("/items-sprite.png", (texture) => {
+    new THREE.TextureLoader().load("/items-sprite.png", (texture: THREE.Texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.magFilter = THREE.NearestFilter;
       texture.minFilter = THREE.NearestFilter;

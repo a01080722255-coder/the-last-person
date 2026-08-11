@@ -62,3 +62,11 @@ This is the update log. Write like this. 0.00.1
 - Split Three.js entities into separate zombie, item, and player render groups so movement updates rebuild less of the scene.
 - Reduced zombie simulation update frequency slightly to lower React and WebGL churn during exploration.
 
+0.00.13
+- Added Vercel-specific project settings so Vercel builds the app as Next.js instead of using the Vinext/Sites build.
+- Removed Google-hosted next/font usage to prevent Vercel/CI build failures caused by font fetch errors.
+- Added a local Three.js module declaration so Vercel's Next.js type check can complete without an extra install.
+- Added a Cloudflare workers module declaration so unused Sites database helpers do not break Vercel type checking.
+- Excluded generated build and deployment folders from TypeScript checks so Vercel does not scan stale worker artifacts.
+- Excluded Cloudflare-only worker and database helper folders from Vercel's Next.js type check.
+
