@@ -65,7 +65,8 @@ const text = {
   first: "\ub9c8\uc778\ud06c\ub798\ud504\ud2b8 \ubdf0",
   third: "3\uc778\uce6d",
   q: "Q \uc0c1\ud638\uc791\uc6a9",
-  attack: "\ud074\ub9ad/Space \uacf5\uaca9",
+  attack: "\ud074\ub9ad \uacf5\uaca9",
+  jump: "Space \uc810\ud504",
   eat: "E \uc74c\uc2dd \uc0ac\uc6a9",
   flashlight: "F \uc190\uc804\ub4f1",
   view: "V \uc2dc\uc810 \uc804\ud658",
@@ -164,6 +165,13 @@ function spriteStyle(index: number): CSSProperties {
   };
 }
 
+function movementKey(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
+  if (["w", "a", "s", "d"].includes(key)) return key;
+  const byCode: Record<string, string> = { KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" };
+  return byCode[event.code];
+}
+
 export default function Game() {
   const [started, setStarted] = useState(false);
   const [health, setHealth] = useState(maxHealth);
@@ -183,6 +191,7 @@ export default function Game() {
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [walking, setWalking] = useState(false);
   const [stepPhase, setStepPhase] = useState(0);
+  const [jumpOffset, setJumpOffset] = useState(0);
   const [eatingSprite, setEatingSprite] = useState<number | null>(null);
   const [flashlightOn, setFlashlightOn] = useState(true);
   const [flashlightBattery, setFlashlightBattery] = useState(50);
@@ -194,6 +203,10 @@ export default function Game() {
   const positionRef = useRef(position);
   const angleRef = useRef(angle);
   const walkingRef = useRef(false);
+  const jumpOffsetRef = useRef(0);
+  const jumpVelocity = useRef(0);
+  const jumpRequested = useRef(false);
+  const zombieSpawnElapsed = useRef(0);
 
   const currentWeapon = inventory[selectedSlot]?.kind === "weapon" ? inventory[selectedSlot] : undefined;
   const aliveZombies = useMemo(() => zombies.filter((zombie) => zombie.area === area && zombie.hp > 0), [area, zombies]);
@@ -249,6 +262,16 @@ export default function Game() {
     audio.pause();
     audio.currentTime = 0;
   }, []);
+
+  const resetMovementInput = useCallback(() => {
+    keys.current.clear();
+    jumpRequested.current = false;
+    if (walkingRef.current) {
+      walkingRef.current = false;
+      setWalking(false);
+    }
+    stopFootsteps();
+  }, [stopFootsteps]);
 
   const showMessage = useCallback((value: string) => {
     setMessage(value);
@@ -406,6 +429,12 @@ export default function Game() {
     setMessage(text.opening);
     setWalking(false);
     walkingRef.current = false;
+    keys.current.clear();
+    jumpRequested.current = false;
+    jumpVelocity.current = 0;
+    jumpOffsetRef.current = 0;
+    zombieSpawnElapsed.current = 0;
+    setJumpOffset(0);
     setEatingSprite(null);
     setFlashlightOn(true);
     setFlashlightBattery(50);
@@ -438,12 +467,17 @@ export default function Game() {
         event.preventDefault();
         event.stopPropagation();
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-        attack();
+        if (!event.repeat && started && !gameOver) jumpRequested.current = true;
         return;
       }
 
       const key = event.key.toLowerCase();
-      if (["w", "a", "s", "d"].includes(key)) keys.current.add(key);
+      const move = movementKey(event);
+      if (move) {
+        keys.current.add(move);
+        return;
+      }
+      if (event.repeat && ["q", "e", "f", "v"].includes(key)) return;
       if (key >= "1" && key <= "9") setSelectedSlot(Number(key) - 1);
       if (key === "q") interact();
       if (key === "e") useSelectedItem();
@@ -455,9 +489,11 @@ export default function Game() {
         event.preventDefault();
         event.stopPropagation();
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        jumpRequested.current = false;
         return;
       }
-      keys.current.delete(event.key.toLowerCase());
+      const move = movementKey(event);
+      if (move) keys.current.delete(move);
     };
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
@@ -465,7 +501,24 @@ export default function Game() {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
     };
-  }, [attack, flashlightBattery, interact, useSelectedItem]);
+  }, [flashlightBattery, gameOver, interact, started, useSelectedItem]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) resetMovementInput();
+    };
+    const onPointerLockChange = () => {
+      if (document.pointerLockElement !== stageRef.current) resetMovementInput();
+    };
+    window.addEventListener("blur", resetMovementInput);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    document.addEventListener("pointerlockchange", onPointerLockChange);
+    return () => {
+      window.removeEventListener("blur", resetMovementInput);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
+    };
+  }, [resetMovementInput]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -488,6 +541,8 @@ export default function Game() {
 
   useEffect(() => {
     if (!started || gameOver) {
+      keys.current.clear();
+      jumpRequested.current = false;
       if (walkingRef.current) {
         walkingRef.current = false;
         setWalking(false);
@@ -536,25 +591,72 @@ export default function Game() {
         });
       }
 
+      if (jumpRequested.current && jumpOffsetRef.current <= 0.001) {
+        jumpVelocity.current = 8.4;
+        jumpRequested.current = false;
+      }
+      if (jumpVelocity.current !== 0 || jumpOffsetRef.current > 0) {
+        const nextVelocity = jumpVelocity.current - 22 * delta;
+        const nextOffset = Math.max(0, jumpOffsetRef.current + nextVelocity * delta);
+        jumpVelocity.current = nextOffset <= 0 ? 0 : nextVelocity;
+        if (Math.abs(nextOffset - jumpOffsetRef.current) > 0.004 || nextOffset === 0) {
+          jumpOffsetRef.current = nextOffset;
+          setJumpOffset(Number(nextOffset.toFixed(3)));
+        }
+      }
+
       zombieElapsed += delta;
       if (zombieElapsed >= 0.12) {
         const zombieDelta = zombieElapsed;
         zombieElapsed = 0;
         setZombies((current) =>
-          current.map((zombie) => {
+          current
+            .filter((zombie) => {
+              if (!outside || zombie.area !== area || zombie.id.length <= 2) return true;
+              return distance(zombie, positionRef.current) < 210;
+            })
+            .map((zombie) => {
             if (zombie.area !== area || zombie.hp <= 0) return zombie;
             const playerPosition = positionRef.current;
             const toPlayer = { x: playerPosition.x - zombie.x, y: playerPosition.y - zombie.y };
             const range = Math.hypot(toPlayer.x, toPlayer.y);
-            if (range > 48 || range < 4) return zombie;
+            if (range > (outside ? 96 : 48) || range < 4) return zombie;
             const zombieSpeed = area === "city" ? 5.8 : 3.8;
+            const nextX = zombie.x + (toPlayer.x / range) * zombieSpeed * zombieDelta;
+            const nextY = zombie.y + (toPlayer.y / range) * zombieSpeed * zombieDelta;
             return {
               ...zombie,
-              x: clamp(zombie.x + (toPlayer.x / range) * zombieSpeed * zombieDelta, mapMin, mapMax),
-              y: clamp(zombie.y + (toPlayer.y / range) * zombieSpeed * zombieDelta, mapMin, mapMax),
+              x: outside ? nextX : clamp(nextX, mapMin, mapMax),
+              y: outside ? nextY : clamp(nextY, mapMin, mapMax),
             };
           }),
         );
+      }
+
+      if (outside) {
+        zombieSpawnElapsed.current += delta;
+        if (zombieSpawnElapsed.current >= 2.8) {
+          zombieSpawnElapsed.current = 0;
+          setZombies((current) => {
+            const playerPosition = positionRef.current;
+            const activeCount = current.filter(
+              (zombie) => zombie.area === area && zombie.hp > 0 && distance(zombie, playerPosition) < 150,
+            ).length;
+            const limit = area === "city" ? 10 : 6;
+            if (activeCount >= limit) return current;
+            const seed = Math.sin((playerPosition.x + current.length * 17.13) * 12.9898 + playerPosition.y * 78.233);
+            const angleToSpawn = seed * Math.PI * 2;
+            const range = area === "city" ? 78 : 92;
+            const zombie: Zombie = {
+              id: `wild-${area}-${Date.now().toString(36)}-${current.length}`,
+              x: playerPosition.x + Math.cos(angleToSpawn) * range,
+              y: playerPosition.y + Math.sin(angleToSpawn) * range,
+              hp: area === "city" ? 45 : 35,
+              area,
+            };
+            return [...current, zombie];
+          });
+        }
       }
 
       animation = requestAnimationFrame(step);
@@ -636,6 +738,7 @@ export default function Game() {
           viewMode={viewMode}
           outside={outside}
           walking={walking}
+          jumpOffset={jumpOffset}
           items={visibleItems}
           zombies={aliveZombies}
           objects={visibleObjects}
@@ -714,6 +817,7 @@ export default function Game() {
       <section className="help-strip">
         <span>{text.q}</span>
         <span>{text.attack}</span>
+        <span>{text.jump}</span>
         <span>{text.eat}</span>
         <span>{text.flashlight}</span>
         <span>{text.view}</span>

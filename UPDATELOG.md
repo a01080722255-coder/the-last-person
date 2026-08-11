@@ -46,3 +46,10 @@ This is the update log. Write like this. 0.00.1
 - Removed forced WebGL context loss during cleanup to prevent refresh crashes.
 - Added one-time refresh recovery for stale dynamically imported game chunks after deployment.
 
+0.00.10
+- Fixed sticky movement input by clearing WASD when the browser loses focus, pointer lock exits, or the game pauses.
+- Changed Space into a jump key and kept attacks on mouse click so jumping no longer triggers weapon actions.
+- Added Minecraft-like biome chunks with plains, desert, scrub terrain, and sparse block props while preserving the optimized chunk window.
+- Let outside-world zombies move beyond the original map bounds and spawn near the player in distant chunks.
+- Hardened refresh recovery so stale chunk reloads cannot loop repeatedly.
+

@@ -44,6 +44,7 @@ type ThreeSceneProps = {
   viewMode: "first" | "third";
   outside: boolean;
   walking: boolean;
+  jumpOffset: number;
   items: SceneItem[];
   zombies: SceneZombie[];
   objects: SceneObject[];
@@ -54,6 +55,7 @@ type ThreeSceneProps = {
 const worldScale = 1.25;
 const chunkSize = 16;
 const materialCache = new Map<number, THREE.MeshStandardMaterial>();
+type Biome = "plains" | "desert" | "scrub" | "city";
 
 function toWorld(value: { x: number; y: number }) {
   return new THREE.Vector3((value.x - 50) * worldScale, 0, (value.y - 50) * worldScale);
@@ -235,11 +237,66 @@ function makeWeapon(weapon?: SceneWeapon) {
   return group;
 }
 
-function chunkColor(cx: number, cz: number, area: Area) {
-  const hash = Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453);
-  const variation = Math.floor((hash % 1) * 18);
-  if (area === "city") return new THREE.Color(0x24282a).offsetHSL(0, 0, variation / 500);
-  return new THREE.Color(0x263820).offsetHSL(0.02, 0.02, variation / 420);
+function chunkNoise(cx: number, cz: number, salt = 0) {
+  const value = Math.sin(cx * 12.9898 + cz * 78.233 + salt * 37.719) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function biomeForChunk(cx: number, cz: number, area: Area): Biome {
+  if (area === "city") return "city";
+  const broad = chunkNoise(Math.floor(cx / 3), Math.floor(cz / 3), 2);
+  if (broad < 0.3) return "desert";
+  if (broad < 0.68) return "plains";
+  return "scrub";
+}
+
+function biomeColor(biome: Biome, cx: number, cz: number) {
+  const variation = chunkNoise(cx, cz, 5) * 0.12 - 0.04;
+  const base =
+    biome === "city" ? 0x24282a :
+      biome === "desert" ? 0xbfa764 :
+        biome === "scrub" ? 0x4e5438 :
+          0x385f30;
+  return new THREE.Color(base).offsetHSL(0, 0.02, variation);
+}
+
+function chunkCenter(cx: number, cz: number) {
+  return new THREE.Vector3(cx * chunkSize + chunkSize / 2, 0, cz * chunkSize + chunkSize / 2);
+}
+
+function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biome) {
+  const density = chunkNoise(cx, cz, 9);
+  if (density > 0.42) return;
+
+  const center = chunkCenter(cx, cz);
+  const x = center.x + (chunkNoise(cx, cz, 11) - 0.5) * 9;
+  const z = center.z + (chunkNoise(cx, cz, 12) - 0.5) * 9;
+
+  if (biome === "desert") {
+    const height = 1.2 + Math.floor(chunkNoise(cx, cz, 13) * 3) * 0.65;
+    const cactus = makeBox([0.55, height, 0.55], 0x486f41, new THREE.Vector3(x, height / 2, z));
+    const armSide = chunkNoise(cx, cz, 14) > 0.5 ? 1 : -1;
+    const arm = makeBox([0.9, 0.38, 0.38], 0x486f41, new THREE.Vector3(x + armSide * 0.58, height * 0.66, z));
+    group.add(cactus, arm);
+    return;
+  }
+
+  if (biome === "plains") {
+    group.add(makeBox([1.5, 0.42, 1.5], 0x5f8b3f, new THREE.Vector3(x, 0.21, z)));
+    if (density < 0.18) group.add(makeBox([0.7, 1.4, 0.7], 0x4a3422, new THREE.Vector3(x + 1.3, 0.7, z - 0.8)));
+    if (density < 0.18) group.add(makeBox([2.2, 1.2, 2.2], 0x355f32, new THREE.Vector3(x + 1.3, 1.65, z - 0.8)));
+    return;
+  }
+
+  if (biome === "scrub") {
+    group.add(makeBox([1.6, 0.62, 1.2], 0x666a5c, new THREE.Vector3(x, 0.31, z)));
+    if (density < 0.22) group.add(makeBox([1, 0.34, 1.9], 0x765f3f, new THREE.Vector3(x - 1.2, 0.17, z + 0.9)));
+    return;
+  }
+
+  if (density < 0.18) {
+    group.add(makeBox([2.2, 0.36, 1.4], 0x363a3c, new THREE.Vector3(x, 0.18, z)));
+  }
 }
 
 function addChunkField(group: THREE.Group, center: THREE.Vector3, area: Area) {
@@ -249,13 +306,15 @@ function addChunkField(group: THREE.Group, center: THREE.Vector3, area: Area) {
     for (let dx = -3; dx <= 3; dx += 1) {
       const cx = centerCx + dx;
       const cz = centerCz + dz;
+      const biome = biomeForChunk(cx, cz, area);
       const tile = new THREE.Mesh(
         new THREE.BoxGeometry(chunkSize, 0.08, chunkSize),
-        new THREE.MeshStandardMaterial({ color: chunkColor(cx, cz, area), roughness: 0.96 }),
+        makeBlockMaterial(biomeColor(biome, cx, cz).getHex()),
       );
       tile.position.set(cx * chunkSize + chunkSize / 2, -0.06, cz * chunkSize + chunkSize / 2);
       tile.receiveShadow = true;
       group.add(tile);
+      addBiomeDetails(group, cx, cz, biome);
     }
   }
 }
@@ -268,6 +327,7 @@ export default function ThreeScene({
   viewMode,
   outside,
   walking,
+  jumpOffset,
   items,
   zombies,
   objects,
@@ -503,6 +563,7 @@ export default function ThreeScene({
     const state = stateRef.current;
     if (!state) return;
     const pos = toWorld(position);
+    pos.y += jumpOffset;
     const yaw = (angle * Math.PI) / 180;
     const pitchRadians = THREE.MathUtils.degToRad(pitch);
     const forward = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitchRadians), Math.sin(pitchRadians), -Math.cos(yaw) * Math.cos(pitchRadians)).normalize();
@@ -531,7 +592,7 @@ export default function ThreeScene({
     state.flashlight.intensity = flashlightOn ? (viewMode === "first" ? 5.6 : 3.4) : 0;
     state.flashlight.position.copy(state.camera.position).add(new THREE.Vector3(0, -0.08, 0));
     state.flashlightTarget.position.copy(state.camera.position).add(forward.clone().multiplyScalar(32));
-  }, [position, angle, pitch, viewMode, walking, flashlightOn]);
+  }, [position, angle, pitch, viewMode, walking, flashlightOn, jumpOffset]);
 
   return <div className="three-scene" ref={rootRef} aria-hidden="true" />;
 }
