@@ -73,6 +73,10 @@
   gap: 6px;
 }
 
+.segmented-control.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .segmented-control button.active {
   border-color: #e1c46a;
   background: linear-gradient(180deg, #806b42, #493b27);

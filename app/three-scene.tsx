@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 type Area = "countryside" | "city";
+type GraphicsMode = "light" | "normal" | "high";
 
 type SceneItem = {
   id: string;
@@ -50,6 +51,7 @@ type ThreeSceneProps = {
   objects: SceneObject[];
   currentWeapon?: SceneWeapon;
   flashlightOn: boolean;
+  graphicsMode: GraphicsMode;
 };
 
 const worldScale = 1.25;
@@ -333,6 +335,7 @@ export default function ThreeScene({
   objects,
   currentWeapon,
   flashlightOn,
+  graphicsMode,
 }: ThreeSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
@@ -358,9 +361,9 @@ export default function ThreeScene({
     if (!root) return;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, graphicsMode === "high" ? 1.5 : graphicsMode === "normal" ? 1.2 : 0.9));
     renderer.setSize(root.clientWidth, root.clientHeight);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = graphicsMode === "high";
     renderer.shadowMap.type = THREE.PCFShadowMap;
     root.appendChild(renderer.domElement);
     const onContextLost = (event: Event) => {
@@ -469,11 +472,23 @@ export default function ThreeScene({
 
   useEffect(() => {
     const state = stateRef.current;
+    const root = rootRef.current;
+    if (!state || !root) return;
+    const ratio = graphicsMode === "high" ? 1.5 : graphicsMode === "normal" ? 1.2 : 0.9;
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, ratio));
+    state.renderer.shadowMap.enabled = graphicsMode === "high";
+    state.flashlight.castShadow = graphicsMode === "high";
+    state.renderer.setSize(root.clientWidth, root.clientHeight);
+  }, [graphicsMode]);
+
+  useEffect(() => {
+    const state = stateRef.current;
     if (!state) return;
 
     const indoors = area === "countryside" && !outside;
+    const fogFar = graphicsMode === "high" ? 120 : graphicsMode === "normal" ? 96 : 70;
     state.scene.background = new THREE.Color(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b);
-    state.scene.fog = new THREE.Fog(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b, indoors ? 16 : 24, indoors ? 58 : 96);
+    state.scene.fog = new THREE.Fog(indoors ? 0x050504 : area === "city" ? 0x07080c : 0x080d0b, indoors ? 16 : 24, indoors ? 58 : fogFar);
     clearGroup(state.world);
 
     if (indoors) {
@@ -502,7 +517,7 @@ export default function ThreeScene({
             : makeBox([2.2, 3.3, 0.45], outside ? 0x4b3828 : 0x9b6a44, base.setY(1.7));
       state.world.add(mesh);
     });
-  }, [area, objects, outside]);
+  }, [area, graphicsMode, objects, outside]);
 
   const chunkX = Math.floor(toWorld(position).x / chunkSize);
   const chunkZ = Math.floor(toWorld(position).z / chunkSize);

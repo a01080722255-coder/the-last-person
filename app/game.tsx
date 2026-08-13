@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { englishText, text } from "./game-text";
 import SettingsPanel, { type GameSettings } from "./settings-panel";
 import ThreeScene from "./three-scene";
+import WorldMenu, { type WorldDifficulty } from "./world-menu";
 
 type Area = "countryside" | "city";
 type ViewMode = "first" | "third";
@@ -52,82 +54,7 @@ const indoorMaxX = 66;
 const indoorMinY = 66;
 const indoorMaxY = 94;
 const interactRange = 18;
-
-const text = {
-  opening: "\ub098\ub294 \uc65c \uc774\uacf3\uc5d0 \uc788\ub294\uc9c0 \ubaa8\ub974\uaca0\ub2e4.",
-  start: "\uc2dc\uc791",
-  crafting: "\uc81c\uc791\ub300",
-  close: "\ub2eb\uae30",
-  health: "\uccb4\ub825",
-  inventory: "\uc778\ubca4\ud1a0\ub9ac",
-  empty: "\ube44\uc5b4 \uc788\uc74c",
-  countryside: "\uc2dc\uace8",
-  city: "\ub3c4\uc2ec",
-  first: "\ub9c8\uc778\ud06c\ub798\ud504\ud2b8 \ubdf0",
-  third: "3\uc778\uce6d",
-  q: "Q \uc0c1\ud638\uc791\uc6a9",
-  attack: "\ud074\ub9ad \uacf5\uaca9",
-  jump: "Space \uc810\ud504",
-  eat: "E \uc74c\uc2dd \uc0ac\uc6a9",
-  flashlight: "F \uc190\uc804\ub4f1",
-  flashlightStatus: "\uc190\uc804\ub4f1",
-  settings: "\uc124\uc815",
-  view: "V \uc2dc\uc810 \uc804\ud658",
-  room: "\uc9d1 \uc548: \ubb38\uc744 \ucc3e\uc544 \ubc16\uc73c\ub85c",
-  promptDefault: "WASD \uc774\ub3d9 · \ub9c8\uc6b0\uc2a4 \ud68c\uc804 · \ud074\ub9ad \uacf5\uaca9",
-  foodSelected: "\uc74c\uc2dd \uc120\ud0dd\ub428",
-  damage: "\ud53c\ud574",
-  gameOver: "\uac8c\uc784 \uc624\ubc84",
-  restart: "\ub2e4\uc2dc \uc2dc\uc791",
-  settingsText: {
-    title: "\uc124\uc815",
-    close: "\ub2eb\uae30",
-    language: "\uc5b8\uc5b4",
-    korean: "\ud55c\uad6d\uc5b4",
-    english: "English",
-    sfxVolume: "\ud6a8\uacfc\uc74c",
-    footstepsVolume: "\ubc1c\uc18c\ub9ac",
-    mouseSensitivity: "\ub9c8\uc6b0\uc2a4 \ubbfc\uac10\ub3c4",
-  },
-};
-
-const englishText: typeof text = {
-  opening: "I do not know why I am here.",
-  start: "Start",
-  crafting: "Workbench",
-  close: "Close",
-  health: "Health",
-  inventory: "Inventory",
-  empty: "Empty",
-  countryside: "Countryside",
-  city: "City",
-  first: "Minecraft view",
-  third: "Third person",
-  q: "Q interact",
-  attack: "Click attack",
-  jump: "Space jump",
-  eat: "E eat",
-  flashlight: "F flashlight",
-  flashlightStatus: "Flashlight",
-  settings: "Settings",
-  view: "V camera",
-  room: "Inside: find the door to leave",
-  promptDefault: "WASD move · mouse look · click attack",
-  foodSelected: "Food selected",
-  damage: "damage",
-  gameOver: "Game Over",
-  restart: "Restart",
-  settingsText: {
-    title: "Settings",
-    close: "Close",
-    language: "Language",
-    korean: "\ud55c\uad6d\uc5b4",
-    english: "English",
-    sfxVolume: "SFX volume",
-    footstepsVolume: "Footsteps",
-    mouseSensitivity: "Mouse sensitivity",
-  },
-};
+const saveKey = "the-last-person-world";
 
 const items: Record<string, Item> = {
   apple: { id: "apple", name: "\uc0ac\uacfc", kind: "food", heal: 5, icon: "A", sprite: 0 },
@@ -244,10 +171,14 @@ export default function Game() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<GameSettings>({
     language: "ko",
+    graphicsMode: "normal",
     sfxVolume: 70,
     footstepsVolume: 42,
     mouseSensitivity: 65,
   });
+  const [worldName, setWorldName] = useState("The Last Person");
+  const [savedWorldName, setSavedWorldName] = useState("");
+  const [worldDifficulty, setWorldDifficulty] = useState<WorldDifficulty>("easy");
   const [message, setMessage] = useState(text.opening);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [walking, setWalking] = useState(false);
@@ -272,6 +203,9 @@ export default function Game() {
 
   const currentWeapon = inventory[selectedSlot]?.kind === "weapon" ? inventory[selectedSlot] : undefined;
   const ui = settings.language === "ko" ? text : englishText;
+  const difficulty = worldDifficulty === "hard"
+    ? { speed: 1.18, spawnDelay: 0.78, limit: 1.3, damage: 1.4 }
+    : { speed: 0.82, spawnDelay: 1.28, limit: 0.8, damage: 0.72 };
   const aliveZombies = useMemo(() => zombies.filter((zombie) => zombie.area === area && zombie.hp > 0), [area, zombies]);
 
   const nearestItem = useMemo(() => {
@@ -507,8 +441,28 @@ export default function Game() {
   }, [stopFootsteps]);
 
   const beginGame = useCallback(() => {
+    const cleanName = worldName.trim() || "The Last Person";
+    setWorldName(cleanName);
+    setSavedWorldName(cleanName);
+    window.localStorage.setItem(saveKey, JSON.stringify({ name: cleanName, difficulty: worldDifficulty }));
+    showMessage(ui.worldSaved);
     setStarted(true);
     stageRef.current?.requestPointerLock?.();
+  }, [showMessage, ui.worldSaved, worldDifficulty, worldName]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(saveKey);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as { name?: string; difficulty?: WorldDifficulty };
+      if (parsed.name) {
+        setWorldName(parsed.name);
+        setSavedWorldName(parsed.name);
+      }
+      if (parsed.difficulty === "easy" || parsed.difficulty === "hard") setWorldDifficulty(parsed.difficulty);
+    } catch {
+      window.localStorage.removeItem(saveKey);
+    }
   }, []);
 
   useEffect(() => {
@@ -705,7 +659,7 @@ export default function Game() {
             const toPlayer = { x: playerPosition.x - zombie.x, y: playerPosition.y - zombie.y };
             const range = Math.hypot(toPlayer.x, toPlayer.y);
             if (range > (outside ? 96 : 48) || range < 4) return zombie;
-            const zombieSpeed = area === "city" ? 4.6 : 3.0;
+            const zombieSpeed = (area === "city" ? 4.6 : 3.0) * difficulty.speed;
             const nextX = zombie.x + (toPlayer.x / range) * zombieSpeed * zombieDelta;
             const nextY = zombie.y + (toPlayer.y / range) * zombieSpeed * zombieDelta;
             return {
@@ -719,14 +673,14 @@ export default function Game() {
 
       if (outside) {
         zombieSpawnElapsed.current += delta;
-        if (zombieSpawnElapsed.current >= 3.8) {
+        if (zombieSpawnElapsed.current >= 3.8 * difficulty.spawnDelay) {
           zombieSpawnElapsed.current = 0;
           setZombies((current) => {
             const playerPosition = positionRef.current;
             const activeCount = current.filter(
               (zombie) => zombie.area === area && zombie.hp > 0 && distance(zombie, playerPosition) < 150,
             ).length;
-            const limit = area === "city" ? 8 : 5;
+            const limit = Math.round((area === "city" ? 8 : 5) * difficulty.limit);
             if (activeCount >= limit) return current;
             const seed = Math.sin((playerPosition.x + current.length * 17.13) * 12.9898 + playerPosition.y * 78.233);
             const angleToSpawn = seed * Math.PI * 2;
@@ -781,7 +735,7 @@ export default function Game() {
 
     animation = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animation);
-  }, [area, gameOver, outside, started, stopFootsteps]);
+  }, [area, difficulty.limit, difficulty.spawnDelay, difficulty.speed, gameOver, outside, started, stopFootsteps]);
 
   useEffect(() => {
     if (walking) {
@@ -801,10 +755,10 @@ export default function Game() {
     const now = Date.now();
     if (closeZombie && now - lastDamageAt.current > 1400) {
       lastDamageAt.current = now;
-      setHealth((value) => Math.max(0, value - (area === "city" ? 6 : 4)));
+      setHealth((value) => Math.max(0, value - Math.round((area === "city" ? 6 : 4) * difficulty.damage)));
       showMessage("\uc880\ube44\uac00 \ub108\ubb34 \uac00\uae4c\uc774 \uc654\ub2e4.");
     }
-  }, [aliveZombies, area, gameOver, position, showMessage]);
+  }, [aliveZombies, area, difficulty.damage, gameOver, position, showMessage]);
 
   useEffect(() => {
     const onMouseMove = (event: MouseEvent) => {
@@ -844,8 +798,7 @@ export default function Game() {
       <section
         ref={stageRef}
         className="stage"
-        onClick={started ? attack : beginGame}
-        onDoubleClick={beginGame}
+        onClick={started ? attack : undefined}
         aria-label="The Last Person game stage"
       >
         <div className="weather-layer" />
@@ -864,18 +817,22 @@ export default function Game() {
           objects={visibleObjects}
           currentWeapon={currentWeapon}
           flashlightOn={flashlightOn && flashlightBattery > 0}
+          graphicsMode={settings.graphicsMode}
         />
         <div className="vignette" />
         <div className="crosshair" />
         <div className="prompt">{prompt}</div>
 
         {!started && (
-          <div className="opening">
-            <div className="speech-bubble">
-              <p>{ui.opening}</p>
-            </div>
-            <button type="button" onClick={beginGame}>{ui.start}</button>
-          </div>
+          <WorldMenu
+            text={ui}
+            worldName={worldName}
+            difficulty={worldDifficulty}
+            savedWorldName={savedWorldName}
+            onNameChange={setWorldName}
+            onDifficultyChange={setWorldDifficulty}
+            onStart={beginGame}
+          />
         )}
 
         {gameOver && (

@@ -1,9 +1,11 @@
 "use client";
 
 type Language = "ko" | "en";
+export type GraphicsMode = "light" | "normal" | "high";
 
 export type GameSettings = {
   language: Language;
+  graphicsMode: GraphicsMode;
   sfxVolume: number;
   footstepsVolume: number;
   mouseSensitivity: number;
@@ -18,6 +20,10 @@ type SettingsText = {
   sfxVolume: string;
   footstepsVolume: string;
   mouseSensitivity: string;
+  graphicsMode: string;
+  graphicsLight: string;
+  graphicsNormal: string;
+  graphicsHigh: string;
 };
 
 type SettingsPanelProps = {
@@ -54,6 +60,33 @@ export default function SettingsPanel({ settings, text, onClose, onChange }: Set
               onClick={() => update({ language: "en" })}
             >
               {text.english}
+            </button>
+          </span>
+        </label>
+
+        <label className="setting-row">
+          <span>{text.graphicsMode}</span>
+          <span className="segmented-control three">
+            <button
+              className={settings.graphicsMode === "light" ? "active" : ""}
+              type="button"
+              onClick={() => update({ graphicsMode: "light" })}
+            >
+              {text.graphicsLight}
+            </button>
+            <button
+              className={settings.graphicsMode === "normal" ? "active" : ""}
+              type="button"
+              onClick={() => update({ graphicsMode: "normal" })}
+            >
+              {text.graphicsNormal}
+            </button>
+            <button
+              className={settings.graphicsMode === "high" ? "active" : ""}
+              type="button"
+              onClick={() => update({ graphicsMode: "high" })}
+            >
+              {text.graphicsHigh}
             </button>
           </span>
         </label>

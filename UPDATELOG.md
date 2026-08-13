@@ -5,6 +5,8 @@ This is the update log. Write like this. 0.00.1
 - Paused movement and camera input while settings or crafting panels are open.
 - Fixed the broken flashlight HUD label.
 - Lowered zombie pressure and changed the health display to 10 Minecraft-style hearts with half-heart support.
+- Added a centered create-world start screen with saved world name and Easy/Hard difficulty selection.
+- Added Light/Normal/High graphics modes that adjust WebGL quality and scene fog.
 
 0.00.2
 - Fixed first-person movement so WASD follows the direction the player is looking.
