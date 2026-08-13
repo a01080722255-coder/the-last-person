@@ -273,6 +273,21 @@ function chunkCenter(cx: number, cz: number) {
   return new THREE.Vector3(cx * chunkSize + chunkSize / 2, 0, cz * chunkSize + chunkSize / 2);
 }
 
+function mountainHeightForChunk(cx: number, cz: number) {
+  return 5.4 + Math.floor(chunkNoise(cx, cz, 16) * 4) * 1.25;
+}
+
+function terrainHeightAtWorld(x: number, z: number, area: Area, outside: boolean) {
+  if (!outside || area === "city") return 0;
+  const cx = Math.floor(x / chunkSize);
+  const cz = Math.floor(z / chunkSize);
+  if (biomeForChunk(cx, cz, area) !== "mountain") return 0;
+  const center = chunkCenter(cx, cz);
+  const distanceFromPeak = Math.hypot(x - center.x, z - center.z);
+  const slope = THREE.MathUtils.clamp(1 - distanceFromPeak / (chunkSize * 0.78), 0, 1);
+  return mountainHeightForChunk(cx, cz) * slope * slope;
+}
+
 function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biome) {
   const density = chunkNoise(cx, cz, 9);
 
@@ -291,11 +306,12 @@ function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biom
   }
 
   if (biome === "mountain") {
-    const base = 5.5 + chunkNoise(cx, cz, 15) * 4;
-    const height = 2.4 + Math.floor(chunkNoise(cx, cz, 16) * 4) * 0.85;
+    const base = 12 + chunkNoise(cx, cz, 15) * 5;
+    const height = mountainHeightForChunk(cx, cz);
     group.add(makeBox([base, height, base], 0x686b68, new THREE.Vector3(center.x, height / 2, center.z)));
-    group.add(makeBox([base * 0.62, height * 0.72, base * 0.62], 0x797b75, new THREE.Vector3(center.x + 1.2, height + height * 0.36, center.z - 0.8)));
-    if (height > 4) group.add(makeBox([base * 0.34, 0.5, base * 0.34], 0xd7d9cf, new THREE.Vector3(center.x + 1.2, height * 1.75, center.z - 0.8)));
+    group.add(makeBox([base * 0.66, height * 0.78, base * 0.66], 0x797b75, new THREE.Vector3(center.x + 1.2, height + height * 0.39, center.z - 0.8)));
+    group.add(makeBox([base * 0.38, height * 0.42, base * 0.38], 0x8b8d86, new THREE.Vector3(center.x - 0.8, height * 1.54, center.z + 1)));
+    group.add(makeBox([base * 0.32, 0.62, base * 0.32], 0xd7d9cf, new THREE.Vector3(center.x - 0.8, height * 1.78, center.z + 1)));
     return;
   }
 
@@ -580,13 +596,15 @@ export default function ThreeScene({
 
     zombies.filter((zombie) => zombie.area === area && zombie.hp > 0).forEach((zombie) => {
       const model = makeZombie();
-      model.position.copy(toWorld(zombie));
+      const modelPosition = toWorld(zombie);
+      modelPosition.y += terrainHeightAtWorld(modelPosition.x, modelPosition.z, area, outside);
+      model.position.copy(modelPosition);
       model.lookAt(toWorld(position));
       addZombieHealthBar(model, zombie.hp, area === "city" ? 45 : 35);
       state.zombieModels.push(model);
       state.zombiesGroup.add(model);
     });
-  }, [area, zombies]);
+  }, [area, outside, position, zombies]);
 
   useEffect(() => {
     const state = stateRef.current;
@@ -594,9 +612,10 @@ export default function ThreeScene({
     clearGroup(state.itemsGroup);
     items.filter((item) => item.area === area).forEach((item) => {
       const base = toWorld(item);
+      const groundHeight = terrainHeightAtWorld(base.x, base.z, area, outside);
       if (item.id === "battery") {
         const battery = new THREE.Group();
-        battery.position.copy(base.setY(0.72));
+        battery.position.copy(base.setY(groundHeight + 0.72));
         battery.add(makeBox([1.05, 0.5, 0.58], 0xd8ca52, new THREE.Vector3(0, 0, 0)));
         battery.add(makeBox([0.18, 0.28, 0.34], 0x363c35, new THREE.Vector3(0.62, 0, 0)));
         state.itemsGroup.add(battery);
@@ -606,12 +625,12 @@ export default function ThreeScene({
         ? new THREE.MeshBasicMaterial({ map: makeItemTexture(state.itemTexture, item.sprite), transparent: true })
         : new THREE.MeshStandardMaterial({ color: 0xe2bb55 });
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.18), material);
-      mesh.position.copy(base.setY(0.9));
+      mesh.position.copy(base.setY(groundHeight + 0.9));
       mesh.rotation.y = Math.PI;
       mesh.castShadow = true;
       state.itemsGroup.add(mesh);
     });
-  }, [area, items]);
+  }, [area, items, outside]);
 
   useEffect(() => {
     const state = stateRef.current;
@@ -643,7 +662,7 @@ export default function ThreeScene({
     const state = stateRef.current;
     if (!state) return;
     const pos = toWorld(position);
-    pos.y += jumpOffset;
+    pos.y += terrainHeightAtWorld(pos.x, pos.z, area, outside) + jumpOffset;
     const yaw = (angle * Math.PI) / 180;
     const pitchRadians = THREE.MathUtils.degToRad(pitch);
     const forward = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitchRadians), Math.sin(pitchRadians), -Math.cos(yaw) * Math.cos(pitchRadians)).normalize();
@@ -681,7 +700,7 @@ export default function ThreeScene({
     state.flashlight.intensity = flashlightOn ? (viewMode === "first" ? 5.6 : 3.4) : 0;
     state.flashlight.position.copy(state.camera.position).add(new THREE.Vector3(0, -0.08, 0));
     state.flashlightTarget.position.copy(state.camera.position).add(forward.clone().multiplyScalar(32));
-  }, [position, angle, pitch, viewMode, walking, flashlightOn, jumpOffset]);
+  }, [position, angle, pitch, viewMode, walking, flashlightOn, jumpOffset, area, outside]);
 
   return <div className="three-scene" ref={rootRef} aria-hidden="true" />;
 }
