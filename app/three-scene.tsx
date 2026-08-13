@@ -58,7 +58,7 @@ type ThreeSceneProps = {
 const worldScale = 1.25;
 const chunkSize = 16;
 const materialCache = new Map<number, THREE.MeshStandardMaterial>();
-type Biome = "plains" | "desert" | "scrub" | "city";
+type Biome = "plains" | "desert" | "scrub" | "river" | "mountain" | "city";
 
 function toWorld(value: { x: number; y: number }) {
   return new THREE.Vector3((value.x - 50) * worldScale, 0, (value.y - 50) * worldScale);
@@ -248,7 +248,10 @@ function chunkNoise(cx: number, cz: number, salt = 0) {
 
 function biomeForChunk(cx: number, cz: number, area: Area): Biome {
   if (area === "city") return "city";
+  const riverPath = Math.abs(cx * 0.42 + Math.sin(cz * 0.48) * 2.2);
+  if (riverPath < 0.72) return "river";
   const broad = chunkNoise(Math.floor(cx / 3), Math.floor(cz / 3), 2);
+  if (broad > 0.84) return "mountain";
   if (broad < 0.3) return "desert";
   if (broad < 0.68) return "plains";
   return "scrub";
@@ -258,6 +261,8 @@ function biomeColor(biome: Biome, cx: number, cz: number) {
   const variation = chunkNoise(cx, cz, 5) * 0.12 - 0.04;
   const base =
     biome === "city" ? 0x24282a :
+      biome === "river" ? 0x1d4d64 :
+        biome === "mountain" ? 0x5b5f60 :
       biome === "desert" ? 0xbfa764 :
         biome === "scrub" ? 0x4e5438 :
           0x385f30;
@@ -270,11 +275,31 @@ function chunkCenter(cx: number, cz: number) {
 
 function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biome) {
   const density = chunkNoise(cx, cz, 9);
-  if (density > 0.42) return;
 
   const center = chunkCenter(cx, cz);
   const x = center.x + (chunkNoise(cx, cz, 11) - 0.5) * 9;
   const z = center.z + (chunkNoise(cx, cz, 12) - 0.5) * 9;
+
+  if (biome === "river") {
+    const water = makeBox([chunkSize - 1.2, 0.08, chunkSize - 1.2], 0x236d8a, new THREE.Vector3(center.x, -0.11, center.z));
+    water.receiveShadow = false;
+    const bankA = makeBox([chunkSize, 0.18, 1.1], 0x6d6847, new THREE.Vector3(center.x, 0.02, center.z - chunkSize / 2 + 0.65));
+    const bankB = makeBox([chunkSize, 0.18, 1.1], 0x6d6847, new THREE.Vector3(center.x, 0.02, center.z + chunkSize / 2 - 0.65));
+    group.add(water, bankA, bankB);
+    if (density < 0.28) group.add(makeBox([1.6, 0.22, 1.1], 0xa7a282, new THREE.Vector3(x, 0.08, z)));
+    return;
+  }
+
+  if (biome === "mountain") {
+    const base = 5.5 + chunkNoise(cx, cz, 15) * 4;
+    const height = 2.4 + Math.floor(chunkNoise(cx, cz, 16) * 4) * 0.85;
+    group.add(makeBox([base, height, base], 0x686b68, new THREE.Vector3(center.x, height / 2, center.z)));
+    group.add(makeBox([base * 0.62, height * 0.72, base * 0.62], 0x797b75, new THREE.Vector3(center.x + 1.2, height + height * 0.36, center.z - 0.8)));
+    if (height > 4) group.add(makeBox([base * 0.34, 0.5, base * 0.34], 0xd7d9cf, new THREE.Vector3(center.x + 1.2, height * 1.75, center.z - 0.8)));
+    return;
+  }
+
+  if (density > 0.42) return;
 
   if (biome === "desert") {
     const height = 1.2 + Math.floor(chunkNoise(cx, cz, 13) * 3) * 0.65;

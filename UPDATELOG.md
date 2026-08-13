@@ -8,6 +8,7 @@ This is the update log. Write like this. 0.00.1
 - Added a centered create-world start screen with saved world name and Easy/Hard difficulty selection.
 - Added Light/Normal/High graphics modes that adjust WebGL quality and scene fog.
 - Added visible attack motion in Normal and High graphics modes and exposed weapon range in combat UI.
+- Added river and mountain chunk biomes to the infinite outside terrain.
 
 0.00.2
 - Fixed first-person movement so WASD follows the direction the player is looking.
