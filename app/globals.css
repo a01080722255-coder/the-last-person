@@ -595,6 +595,7 @@ button {
 
 .opening button,
 .craft-button,
+.settings-button,
 .status-panel button,
 .crafting button {
   min-height: 38px;
@@ -657,17 +658,42 @@ button {
   font-size: 13px;
 }
 
-.health-bar {
-  height: 12px;
-  border-radius: 99px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.12);
+.heart-bar {
+  display: flex;
+  gap: 3px;
 }
 
-.health-bar b {
-  display: block;
-  height: 100%;
-  transition: width 0.25s ease, background 0.25s ease;
+.heart {
+  position: relative;
+  width: 17px;
+  height: 17px;
+  color: rgba(255, 255, 255, 0.16);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.heart::before {
+  content: "\2665";
+  position: absolute;
+  inset: 0;
+}
+
+.heart.half::before {
+  color: #ff5c5c;
+  clip-path: inset(0 50% 0 0);
+}
+
+.heart.full::before {
+  color: #ff5c5c;
+}
+
+.heart::after {
+  content: "\2665";
+  position: absolute;
+  inset: 0;
+  color: rgba(0, 0, 0, 0.36);
+  translate: 1px 1px;
+  z-index: -1;
 }
 
 .status-panel {

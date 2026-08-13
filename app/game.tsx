@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import SettingsPanel, { type GameSettings } from "./settings-panel";
 import ThreeScene from "./three-scene";
 
 type Area = "countryside" | "city";
@@ -69,10 +70,63 @@ const text = {
   jump: "Space \uc810\ud504",
   eat: "E \uc74c\uc2dd \uc0ac\uc6a9",
   flashlight: "F \uc190\uc804\ub4f1",
+  flashlightStatus: "\uc190\uc804\ub4f1",
+  settings: "\uc124\uc815",
   view: "V \uc2dc\uc810 \uc804\ud658",
   room: "\uc9d1 \uc548: \ubb38\uc744 \ucc3e\uc544 \ubc16\uc73c\ub85c",
+  promptDefault: "WASD \uc774\ub3d9 · \ub9c8\uc6b0\uc2a4 \ud68c\uc804 · \ud074\ub9ad \uacf5\uaca9",
+  foodSelected: "\uc74c\uc2dd \uc120\ud0dd\ub428",
+  damage: "\ud53c\ud574",
   gameOver: "\uac8c\uc784 \uc624\ubc84",
   restart: "\ub2e4\uc2dc \uc2dc\uc791",
+  settingsText: {
+    title: "\uc124\uc815",
+    close: "\ub2eb\uae30",
+    language: "\uc5b8\uc5b4",
+    korean: "\ud55c\uad6d\uc5b4",
+    english: "English",
+    sfxVolume: "\ud6a8\uacfc\uc74c",
+    footstepsVolume: "\ubc1c\uc18c\ub9ac",
+    mouseSensitivity: "\ub9c8\uc6b0\uc2a4 \ubbfc\uac10\ub3c4",
+  },
+};
+
+const englishText: typeof text = {
+  opening: "I do not know why I am here.",
+  start: "Start",
+  crafting: "Workbench",
+  close: "Close",
+  health: "Health",
+  inventory: "Inventory",
+  empty: "Empty",
+  countryside: "Countryside",
+  city: "City",
+  first: "Minecraft view",
+  third: "Third person",
+  q: "Q interact",
+  attack: "Click attack",
+  jump: "Space jump",
+  eat: "E eat",
+  flashlight: "F flashlight",
+  flashlightStatus: "Flashlight",
+  settings: "Settings",
+  view: "V camera",
+  room: "Inside: find the door to leave",
+  promptDefault: "WASD move · mouse look · click attack",
+  foodSelected: "Food selected",
+  damage: "damage",
+  gameOver: "Game Over",
+  restart: "Restart",
+  settingsText: {
+    title: "Settings",
+    close: "Close",
+    language: "Language",
+    korean: "\ud55c\uad6d\uc5b4",
+    english: "English",
+    sfxVolume: "SFX volume",
+    footstepsVolume: "Footsteps",
+    mouseSensitivity: "Mouse sensitivity",
+  },
 };
 
 const items: Record<string, Item> = {
@@ -187,6 +241,13 @@ export default function Game() {
   const [xp, setXp] = useState(0);
   const [outside, setOutside] = useState(false);
   const [craftingOpen, setCraftingOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<GameSettings>({
+    language: "ko",
+    sfxVolume: 70,
+    footstepsVolume: 42,
+    mouseSensitivity: 65,
+  });
   const [message, setMessage] = useState(text.opening);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [walking, setWalking] = useState(false);
@@ -210,6 +271,7 @@ export default function Game() {
   const itemSpawnElapsed = useRef(0);
 
   const currentWeapon = inventory[selectedSlot]?.kind === "weapon" ? inventory[selectedSlot] : undefined;
+  const ui = settings.language === "ko" ? text : englishText;
   const aliveZombies = useMemo(() => zombies.filter((zombie) => zombie.area === area && zombie.hp > 0), [area, zombies]);
 
   const nearestItem = useMemo(() => {
@@ -234,7 +296,7 @@ export default function Game() {
       ? nearestObject.type === "car" && xp < 20
         ? "\uacbd\ud5d8\uce58 20 \ud544\uc694: \uc790\ub3d9\ucc28 \uc218\ub9ac \ubd88\uac00"
         : nearestObject.hint
-      : "WASD \uc774\ub3d9 · \ub9c8\uc6b0\uc2a4 \ud68c\uc804 · \ud074\ub9ad \uacf5\uaca9";
+      : ui.promptDefault;
 
   const gameOver = health <= 0;
   const cameraVars = {
@@ -245,17 +307,18 @@ export default function Game() {
   const playPickup = useCallback(() => {
     const audio = pickupAudio.current;
     if (!audio) return;
+    audio.volume = settings.sfxVolume / 100;
     audio.currentTime = 0;
     void audio.play().catch(() => undefined);
-  }, []);
+  }, [settings.sfxVolume]);
 
   const startFootsteps = useCallback(() => {
     const audio = footstepAudio.current;
     if (!audio || !started || gameOver) return;
-    audio.volume = 0.42;
+    audio.volume = settings.footstepsVolume / 100;
     audio.loop = true;
     void audio.play().catch(() => undefined);
-  }, [gameOver, started]);
+  }, [gameOver, settings.footstepsVolume, started]);
 
   const stopFootsteps = useCallback(() => {
     const audio = footstepAudio.current;
@@ -459,23 +522,42 @@ export default function Game() {
   useEffect(() => {
     pickupAudio.current = new Audio("/sounds/pickup.mp3");
     footstepAudio.current = new Audio("/sounds/footsteps.mp3");
-    if (pickupAudio.current) pickupAudio.current.volume = 0.7;
     return () => stopFootsteps();
   }, [stopFootsteps]);
 
   useEffect(() => {
+    if (pickupAudio.current) pickupAudio.current.volume = settings.sfxVolume / 100;
+    if (footstepAudio.current) footstepAudio.current.volume = settings.footstepsVolume / 100;
+  }, [settings.footstepsVolume, settings.sfxVolume]);
+
+  useEffect(() => {
+    if (settingsOpen || craftingOpen) {
+      resetMovementInput();
+      document.exitPointerLock?.();
+    }
+  }, [craftingOpen, resetMovementInput, settingsOpen]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        resetMovementInput();
+        setSettingsOpen((open) => !open);
+        return;
+      }
+      if (settingsOpen) return;
       if (event.code === "Space") {
         event.preventDefault();
         event.stopPropagation();
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-        if (!event.repeat && started && !gameOver) jumpRequested.current = true;
+        if (!event.repeat && started && !gameOver && !craftingOpen) jumpRequested.current = true;
         return;
       }
 
       const key = event.key.toLowerCase();
       const move = movementKey(event);
       if (move) {
+        if (craftingOpen) return;
         keys.current.add(move);
         return;
       }
@@ -503,7 +585,7 @@ export default function Game() {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
     };
-  }, [flashlightBattery, gameOver, interact, started, useSelectedItem]);
+  }, [craftingOpen, flashlightBattery, gameOver, interact, resetMovementInput, settingsOpen, started, useSelectedItem]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -623,7 +705,7 @@ export default function Game() {
             const toPlayer = { x: playerPosition.x - zombie.x, y: playerPosition.y - zombie.y };
             const range = Math.hypot(toPlayer.x, toPlayer.y);
             if (range > (outside ? 96 : 48) || range < 4) return zombie;
-            const zombieSpeed = area === "city" ? 5.8 : 3.8;
+            const zombieSpeed = area === "city" ? 4.6 : 3.0;
             const nextX = zombie.x + (toPlayer.x / range) * zombieSpeed * zombieDelta;
             const nextY = zombie.y + (toPlayer.y / range) * zombieSpeed * zombieDelta;
             return {
@@ -637,14 +719,14 @@ export default function Game() {
 
       if (outside) {
         zombieSpawnElapsed.current += delta;
-        if (zombieSpawnElapsed.current >= 2.8) {
+        if (zombieSpawnElapsed.current >= 3.8) {
           zombieSpawnElapsed.current = 0;
           setZombies((current) => {
             const playerPosition = positionRef.current;
             const activeCount = current.filter(
               (zombie) => zombie.area === area && zombie.hp > 0 && distance(zombie, playerPosition) < 150,
             ).length;
-            const limit = area === "city" ? 10 : 6;
+            const limit = area === "city" ? 8 : 5;
             if (activeCount >= limit) return current;
             const seed = Math.sin((playerPosition.x + current.length * 17.13) * 12.9898 + playerPosition.y * 78.233);
             const angleToSpawn = seed * Math.PI * 2;
@@ -715,28 +797,28 @@ export default function Game() {
       return;
     }
 
-    const closeZombie = aliveZombies.some((zombie) => distance(zombie, position) < 5.5);
+    const closeZombie = aliveZombies.some((zombie) => distance(zombie, position) < 5);
     const now = Date.now();
-    if (closeZombie && now - lastDamageAt.current > 1000) {
+    if (closeZombie && now - lastDamageAt.current > 1400) {
       lastDamageAt.current = now;
-      setHealth((value) => Math.max(0, value - (area === "city" ? 9 : 6)));
+      setHealth((value) => Math.max(0, value - (area === "city" ? 6 : 4)));
       showMessage("\uc880\ube44\uac00 \ub108\ubb34 \uac00\uae4c\uc774 \uc654\ub2e4.");
     }
   }, [aliveZombies, area, gameOver, position, showMessage]);
 
   useEffect(() => {
     const onMouseMove = (event: MouseEvent) => {
-      if (!started || gameOver) return;
+      if (!started || gameOver || settingsOpen || craftingOpen) return;
       if (document.pointerLockElement === stageRef.current || event.buttons === 1) {
-        setAngle((value) => (value + event.movementX * 0.065) % 360);
-        setPitch((value) => clamp(value - event.movementY * 0.055, -72, 72));
+        const sensitivity = settings.mouseSensitivity / 65;
+        setAngle((value) => (value + event.movementX * 0.065 * sensitivity) % 360);
+        setPitch((value) => clamp(value - event.movementY * 0.055 * sensitivity, -72, 72));
       }
     };
     window.addEventListener("mousemove", onMouseMove);
     return () => window.removeEventListener("mousemove", onMouseMove);
-  }, [gameOver, started]);
+  }, [craftingOpen, gameOver, settings.mouseSensitivity, settingsOpen, started]);
 
-  const healthColor = health > 55 ? "#66d47e" : health > 25 ? "#e3c45c" : "#ef6a5b";
   const cooldownLeft = Math.max(0, cooldownUntil - Date.now());
   const visibleObjects = useMemo(
     () => interactables.filter((object) => object.area === area && (outside || object.type === "door")),
@@ -748,12 +830,15 @@ export default function Game() {
   );
 
   return (
-    <main className={`game-shell ${area} ${viewMode} ${outside ? "outside" : "inside"} ${walking ? "walking" : ""} ${eatingSprite !== null ? "eating" : ""}`} style={cameraVars}>
+    <main className={`game-shell ${area} ${viewMode} ${outside ? "outside" : "inside"} ${walking ? "walking" : ""} ${eatingSprite !== null ? "eating" : ""} ${settingsOpen ? "settings-open" : ""}`} style={cameraVars}>
       <audio src="/sounds/pickup.mp3" preload="auto" />
       <audio src="/sounds/footsteps.mp3" preload="auto" loop />
 
       <button className="craft-button" onClick={() => setCraftingOpen(true)} type="button">
-        {text.crafting}
+        {ui.crafting}
+      </button>
+      <button className="settings-button" onClick={() => setSettingsOpen(true)} type="button">
+        {ui.settings}
       </button>
 
       <section
@@ -787,40 +872,48 @@ export default function Game() {
         {!started && (
           <div className="opening">
             <div className="speech-bubble">
-              <p>{text.opening}</p>
+              <p>{ui.opening}</p>
             </div>
-            <button type="button" onClick={beginGame}>{text.start}</button>
+            <button type="button" onClick={beginGame}>{ui.start}</button>
           </div>
         )}
 
         {gameOver && (
           <div className="opening game-over">
             <div className="speech-bubble">
-              <p>{text.gameOver}</p>
+              <p>{ui.gameOver}</p>
             </div>
-            <button type="button" onClick={restart}>{text.restart}</button>
+            <button type="button" onClick={restart}>{ui.restart}</button>
           </div>
         )}
       </section>
 
       <aside className="health-panel">
-        <span>{text.health}</span>
-        <div className="health-bar">
-          <b style={{ width: `${health}%`, background: healthColor }} />
+        <span>{ui.health}</span>
+        <div className="heart-bar" aria-label={`${health}/${maxHealth}`}>
+          {Array.from({ length: 10 }).map((_, index) => {
+            const heartValue = clamp(health - index * 10, 0, 10);
+            return (
+              <span
+                key={index}
+                className={heartValue >= 10 ? "heart full" : heartValue >= 5 ? "heart half" : "heart empty"}
+              />
+            );
+          })}
         </div>
         <strong>{health}/{maxHealth}</strong>
       </aside>
 
       <aside className="status-panel">
-        <span>{area === "countryside" ? text.countryside : text.city}</span>
+        <span>{area === "countryside" ? ui.countryside : ui.city}</span>
         <strong>EXP {xp}</strong>
         <button type="button" onClick={() => setViewMode((mode) => (mode === "first" ? "third" : "first"))}>
-          {viewMode === "first" ? text.first : text.third}
+          {viewMode === "first" ? ui.first : ui.third}
         </button>
       </aside>
 
       <aside className="flashlight-panel">
-        <span>손전등</span>
+        <span>{ui.flashlightStatus}</span>
         <div className="battery-bar">
           <b style={{ width: `${flashlightBattery}%` }} />
         </div>
@@ -829,7 +922,7 @@ export default function Game() {
 
       <section className="message-log" aria-live="polite">{message}</section>
 
-      <section className="inventory" aria-label={text.inventory}>
+      <section className="inventory" aria-label={ui.inventory}>
         {Array.from({ length: 9 }).map((_, index) => {
           const item = inventory[index];
           return (
@@ -839,7 +932,7 @@ export default function Game() {
               onClick={() => setSelectedSlot(index)}
               onDoubleClick={useSelectedItem}
               type="button"
-              aria-label={`${index + 1}\ubc88 \uc2ac\ub86f ${item?.name ?? text.empty}`}
+              aria-label={`${index + 1}\ubc88 \uc2ac\ub86f ${item?.name ?? ui.empty}`}
             >
               <small>{index + 1}</small>
               <span className="slot-art" style={item ? spriteStyle(item.sprite) : undefined} />
@@ -850,23 +943,23 @@ export default function Game() {
       </section>
 
       <section className="help-strip">
-        <span>{text.q}</span>
-        <span>{text.attack}</span>
-        <span>{text.jump}</span>
-        <span>{text.eat}</span>
-        <span>{text.flashlight}</span>
-        <span>{text.view}</span>
-        <span>{currentWeapon ? `${currentWeapon.name} \ud53c\ud574 ${currentWeapon.damage}` : "\uc74c\uc2dd \uc120\ud0dd\ub428"}</span>
+        <span>{ui.q}</span>
+        <span>{ui.attack}</span>
+        <span>{ui.jump}</span>
+        <span>{ui.eat}</span>
+        <span>{ui.flashlight}</span>
+        <span>{ui.view}</span>
+        <span>{currentWeapon ? `${currentWeapon.name} ${ui.damage} ${currentWeapon.damage}` : ui.foodSelected}</span>
         {cooldownLeft > 0 && <span>\ucfe8\ud0c0\uc784 {(cooldownLeft / 1000).toFixed(1)}\ucd08</span>}
-        {!outside && <span>{text.room}</span>}
+        {!outside && <span>{ui.room}</span>}
       </section>
 
       {craftingOpen && (
-        <section className="crafting" aria-label={text.crafting}>
+        <section className="crafting" aria-label={ui.crafting}>
           <div className="crafting-panel">
             <header>
-              <span>{text.crafting}</span>
-              <button type="button" onClick={() => setCraftingOpen(false)}>{text.close}</button>
+              <span>{ui.crafting}</span>
+              <button type="button" onClick={() => setCraftingOpen(false)}>{ui.close}</button>
             </header>
             <button type="button" onClick={() => craftBat("bat1", items.bat2)}>
               {"\ubc29\ub9dd\uc774 1\ub2e8\uacc4 + \ubc29\ub9dd\uc774 1\ub2e8\uacc4 \u2192 \ubc29\ub9dd\uc774 2\ub2e8\uacc4"}
@@ -877,6 +970,14 @@ export default function Game() {
             <p>{"\ubc29\ub9dd\uc774\ub294 \uc5c5\uadf8\ub808\uc774\ub4dc\ub9c8\ub2e4 \ud53c\ud574\ub7c9\uc774 5 \uc99d\uac00\ud55c\ub2e4."}</p>
           </div>
         </section>
+      )}
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          text={ui.settingsText}
+          onClose={() => setSettingsOpen(false)}
+          onChange={(next) => setSettings(next)}
+        />
       )}
     </main>
   );

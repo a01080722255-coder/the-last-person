@@ -1,5 +1,11 @@
 This is the update log. Write like this. 0.00.1
 
+0.00.14
+- Added an in-game settings menu for Korean/English UI switching, SFX volume, footsteps volume, and mouse sensitivity.
+- Paused movement and camera input while settings or crafting panels are open.
+- Fixed the broken flashlight HUD label.
+- Lowered zombie pressure and changed the health display to 10 Minecraft-style hearts with half-heart support.
+
 0.00.2
 - Fixed first-person movement so WASD follows the direction the player is looking.
 - Fixed strafing being blocked in some sections by removing the indoor Y-axis movement clamp.
