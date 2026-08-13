@@ -10,6 +10,7 @@ This is the update log. Write like this. 0.00.1
 - Added visible attack motion in Normal and High graphics modes and exposed weapon range in combat UI.
 - Added river and mountain chunk biomes to the infinite outside terrain.
 - Enlarged mountain chunks and made the player, zombies, and pickups follow mountain height while crossing them.
+- Reworked mountains into wider terraced slopes so players climb them gradually instead of clipping into steep blocks.
 
 0.00.2
 - Fixed first-person movement so WASD follows the direction the player is looking.

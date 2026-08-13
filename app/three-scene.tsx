@@ -251,7 +251,7 @@ function biomeForChunk(cx: number, cz: number, area: Area): Biome {
   const riverPath = Math.abs(cx * 0.42 + Math.sin(cz * 0.48) * 2.2);
   if (riverPath < 0.72) return "river";
   const broad = chunkNoise(Math.floor(cx / 3), Math.floor(cz / 3), 2);
-  if (broad > 0.84) return "mountain";
+  if (broad > 0.76) return "mountain";
   if (broad < 0.3) return "desert";
   if (broad < 0.68) return "plains";
   return "scrub";
@@ -274,18 +274,26 @@ function chunkCenter(cx: number, cz: number) {
 }
 
 function mountainHeightForChunk(cx: number, cz: number) {
-  return 5.4 + Math.floor(chunkNoise(cx, cz, 16) * 4) * 1.25;
+  return 9 + Math.floor(chunkNoise(cx, cz, 16) * 4) * 1.35;
 }
 
 function terrainHeightAtWorld(x: number, z: number, area: Area, outside: boolean) {
   if (!outside || area === "city") return 0;
   const cx = Math.floor(x / chunkSize);
   const cz = Math.floor(z / chunkSize);
-  if (biomeForChunk(cx, cz, area) !== "mountain") return 0;
-  const center = chunkCenter(cx, cz);
-  const distanceFromPeak = Math.hypot(x - center.x, z - center.z);
-  const slope = THREE.MathUtils.clamp(1 - distanceFromPeak / (chunkSize * 0.78), 0, 1);
-  return mountainHeightForChunk(cx, cz) * slope * slope;
+  let height = 0;
+  for (let dz = -1; dz <= 1; dz += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      const mountainCx = cx + dx;
+      const mountainCz = cz + dz;
+      if (biomeForChunk(mountainCx, mountainCz, area) !== "mountain") continue;
+      const center = chunkCenter(mountainCx, mountainCz);
+      const distanceFromPeak = Math.hypot(x - center.x, z - center.z);
+      const slope = THREE.MathUtils.clamp(1 - distanceFromPeak / (chunkSize * 1.55), 0, 1);
+      height = Math.max(height, mountainHeightForChunk(mountainCx, mountainCz) * slope * slope * (3 - 2 * slope));
+    }
+  }
+  return height;
 }
 
 function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biome) {
@@ -306,12 +314,16 @@ function addBiomeDetails(group: THREE.Group, cx: number, cz: number, biome: Biom
   }
 
   if (biome === "mountain") {
-    const base = 12 + chunkNoise(cx, cz, 15) * 5;
     const height = mountainHeightForChunk(cx, cz);
-    group.add(makeBox([base, height, base], 0x686b68, new THREE.Vector3(center.x, height / 2, center.z)));
-    group.add(makeBox([base * 0.66, height * 0.78, base * 0.66], 0x797b75, new THREE.Vector3(center.x + 1.2, height + height * 0.39, center.z - 0.8)));
-    group.add(makeBox([base * 0.38, height * 0.42, base * 0.38], 0x8b8d86, new THREE.Vector3(center.x - 0.8, height * 1.54, center.z + 1)));
-    group.add(makeBox([base * 0.32, 0.62, base * 0.32], 0xd7d9cf, new THREE.Vector3(center.x - 0.8, height * 1.78, center.z + 1)));
+    const layers = 12;
+    for (let layer = 0; layer < layers; layer += 1) {
+      const progress = layer / (layers - 1);
+      const size = THREE.MathUtils.lerp(chunkSize * 2.7, chunkSize * 0.42, progress);
+      const layerHeight = height / layers;
+      const color = progress > 0.82 ? 0xd7d9cf : progress > 0.55 ? 0x82847e : 0x676b68;
+      const y = layerHeight * (layer + 0.5);
+      group.add(makeBox([size, layerHeight, size], color, new THREE.Vector3(center.x, y, center.z)));
+    }
     return;
   }
 
