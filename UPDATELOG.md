@@ -7,6 +7,7 @@ This is the update log. Write like this. 0.00.1
 - Lowered zombie pressure and changed the health display to 10 Minecraft-style hearts with half-heart support.
 - Added a centered create-world start screen with saved world name and Easy/Hard difficulty selection.
 - Added Light/Normal/High graphics modes that adjust WebGL quality and scene fog.
+- Added visible attack motion in Normal and High graphics modes and exposed weapon range in combat UI.
 
 0.00.2
 - Fixed first-person movement so WASD follows the direction the player is looking.

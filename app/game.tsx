@@ -17,6 +17,7 @@ type Item = {
   kind: ItemKind;
   heal?: number;
   damage?: number;
+  range?: number;
   cooldown?: number;
   icon: string;
   sprite: number;
@@ -63,11 +64,11 @@ const items: Record<string, Item> = {
   bread: { id: "bread", name: "\ube75", kind: "food", heal: 10, icon: "B", sprite: 3 },
   rawMeat: { id: "rawMeat", name: "\uc0dd\uace0\uae30", kind: "food", heal: -5, icon: "R", sprite: 4 },
   cookedMeat: { id: "cookedMeat", name: "\uad6c\uc6b4 \uace0\uae30", kind: "food", heal: 10, icon: "M", sprite: 5 },
-  bat1: { id: "bat1", name: "\ubc29\ub9dd\uc774 1\ub2e8\uacc4", kind: "weapon", damage: 5, cooldown: 2, icon: "1", sprite: 6 },
-  bat2: { id: "bat2", name: "\ubc29\ub9dd\uc774 2\ub2e8\uacc4", kind: "weapon", damage: 10, cooldown: 2, icon: "2", sprite: 7 },
-  bat3: { id: "bat3", name: "\ubc29\ub9dd\uc774 3\ub2e8\uacc4", kind: "weapon", damage: 15, cooldown: 2, icon: "3", sprite: 8 },
-  knife: { id: "knife", name: "\uce7c", kind: "weapon", damage: 30, cooldown: 10, icon: "K", sprite: 9 },
-  gun: { id: "gun", name: "\ucd1d", kind: "weapon", damage: 45, cooldown: 1.5, icon: "P", sprite: 10 },
+  bat1: { id: "bat1", name: "\ubc29\ub9dd\uc774 1\ub2e8\uacc4", kind: "weapon", damage: 5, range: 24, cooldown: 2, icon: "1", sprite: 6 },
+  bat2: { id: "bat2", name: "\ubc29\ub9dd\uc774 2\ub2e8\uacc4", kind: "weapon", damage: 10, range: 26, cooldown: 2, icon: "2", sprite: 7 },
+  bat3: { id: "bat3", name: "\ubc29\ub9dd\uc774 3\ub2e8\uacc4", kind: "weapon", damage: 15, range: 28, cooldown: 2, icon: "3", sprite: 8 },
+  knife: { id: "knife", name: "\uce7c", kind: "weapon", damage: 30, range: 18, cooldown: 10, icon: "K", sprite: 9 },
+  gun: { id: "gun", name: "\ucd1d", kind: "weapon", damage: 45, range: 52, cooldown: 1.5, icon: "P", sprite: 10 },
   battery: { id: "battery", name: "\ubc30\ud130\ub9ac", kind: "battery", icon: "T", sprite: 1 },
 };
 
@@ -181,6 +182,7 @@ export default function Game() {
   const [worldDifficulty, setWorldDifficulty] = useState<WorldDifficulty>("easy");
   const [message, setMessage] = useState(text.opening);
   const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [attackSignal, setAttackSignal] = useState(0);
   const [walking, setWalking] = useState(false);
   const [stepPhase, setStepPhase] = useState(0);
   const [jumpOffset, setJumpOffset] = useState(0);
@@ -359,13 +361,14 @@ export default function Game() {
         return { zombie, range, aimError };
       })
       .filter(({ range, aimError }) => {
-        const rangeLimit = weapon.id === "gun" ? 52 : weapon.id === "knife" ? 18 : 24;
+        const rangeLimit = weapon.range ?? 20;
         const aimLimit = weapon.id === "gun" ? 18 : weapon.id === "knife" ? 32 : 42;
         return range <= rangeLimit && (aimError <= aimLimit || range <= 8);
       })
       .sort((a, b) => a.aimError - b.aimError || a.range - b.range)[0]?.zombie;
 
     setCooldownUntil(now + (weapon.cooldown ?? 1) * 1000);
+    setAttackSignal((value) => value + 1);
 
     if (!target) {
       showMessage(`${weapon.name}\uc744(\ub97c) \ud5c8\uacf5\uc5d0 \ud718\ub458\ub800\ub2e4.`);
@@ -424,6 +427,7 @@ export default function Game() {
     setOutside(false);
     setCraftingOpen(false);
     setCooldownUntil(0);
+    setAttackSignal(0);
     setMessage(text.opening);
     setWalking(false);
     walkingRef.current = false;
@@ -818,6 +822,7 @@ export default function Game() {
           currentWeapon={currentWeapon}
           flashlightOn={flashlightOn && flashlightBattery > 0}
           graphicsMode={settings.graphicsMode}
+          attackSignal={attackSignal}
         />
         <div className="vignette" />
         <div className="crosshair" />
@@ -906,7 +911,7 @@ export default function Game() {
         <span>{ui.eat}</span>
         <span>{ui.flashlight}</span>
         <span>{ui.view}</span>
-        <span>{currentWeapon ? `${currentWeapon.name} ${ui.damage} ${currentWeapon.damage}` : ui.foodSelected}</span>
+        <span>{currentWeapon ? `${currentWeapon.name} ${ui.damage} ${currentWeapon.damage} / ${ui.range} ${currentWeapon.range}` : ui.foodSelected}</span>
         {cooldownLeft > 0 && <span>\ucfe8\ud0c0\uc784 {(cooldownLeft / 1000).toFixed(1)}\ucd08</span>}
         {!outside && <span>{ui.room}</span>}
       </section>

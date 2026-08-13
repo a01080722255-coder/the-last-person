@@ -52,6 +52,7 @@ type ThreeSceneProps = {
   currentWeapon?: SceneWeapon;
   flashlightOn: boolean;
   graphicsMode: GraphicsMode;
+  attackSignal: number;
 };
 
 const worldScale = 1.25;
@@ -222,6 +223,7 @@ function addInteriorRoom(group: THREE.Group) {
 function makeWeapon(weapon?: SceneWeapon) {
   if (!weapon) return null;
   const group = new THREE.Group();
+  group.name = "held-weapon";
   const sleeve = makeBox([0.44, 0.42, 1.18], 0x3d4b45, new THREE.Vector3(0, -0.05, 0.24));
   const hand = makeBox([0.5, 0.38, 0.38], 0x6a7569, new THREE.Vector3(0, 0.02, -0.46));
   sleeve.rotation.x = -0.14;
@@ -336,6 +338,7 @@ export default function ThreeScene({
   currentWeapon,
   flashlightOn,
   graphicsMode,
+  attackSignal,
 }: ThreeSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
@@ -354,6 +357,8 @@ export default function ThreeScene({
     flashlightTarget: THREE.Object3D;
     itemTexture?: THREE.Texture;
     animation: number;
+    attackStartedAt: number;
+    graphicsMode: GraphicsMode;
   } | null>(null);
 
   useEffect(() => {
@@ -438,6 +443,16 @@ export default function ThreeScene({
         const health = zombie.getObjectByName("zombie-health");
         if (health) health.quaternion.copy(activeCamera.quaternion);
       });
+      const heldWeapon = stateRef.current?.hand.getObjectByName("held-weapon");
+      if (heldWeapon) {
+        const currentState = stateRef.current;
+        const elapsed = currentState ? performance.now() - currentState.attackStartedAt : 999;
+        const mode = currentState?.graphicsMode ?? "normal";
+        const duration = mode === "high" ? 260 : 210;
+        const amount = mode === "light" ? 0 : Math.max(0, Math.sin(Math.min(1, elapsed / duration) * Math.PI));
+        heldWeapon.position.set(0, -0.08 * amount, -0.34 * amount);
+        heldWeapon.rotation.set(-0.58 * amount, 0.16 * amount, -0.32 * amount);
+      }
       renderer.render(scene, camera);
       if (stateRef.current) stateRef.current.animation = requestAnimationFrame(render);
     };
@@ -455,6 +470,8 @@ export default function ThreeScene({
       zombieModels: [],
       flashlight,
       flashlightTarget,
+      attackStartedAt: -999,
+      graphicsMode,
       animation: requestAnimationFrame(render),
     };
 
@@ -478,6 +495,7 @@ export default function ThreeScene({
     state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, ratio));
     state.renderer.shadowMap.enabled = graphicsMode === "high";
     state.flashlight.castShadow = graphicsMode === "high";
+    state.graphicsMode = graphicsMode;
     state.renderer.setSize(root.clientWidth, root.clientHeight);
   }, [graphicsMode]);
 
@@ -589,6 +607,12 @@ export default function ThreeScene({
     const weapon = makeWeapon(currentWeapon);
     if (weapon) state.hand.add(weapon);
   }, [currentWeapon]);
+
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state || attackSignal === 0 || graphicsMode === "light") return;
+    state.attackStartedAt = performance.now();
+  }, [attackSignal, graphicsMode]);
 
   useEffect(() => {
     const state = stateRef.current;
